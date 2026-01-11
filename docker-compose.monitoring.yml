@@ -1,0 +1,63 @@
+###################################################################################################
+# docker-compose.monitoring.yml
+# -------------------------------------------------------------------------------------------------
+# Extends the base stack with an observability suite:
+#   - prometheus: scrapes metrics from worker(s)
+#   - loki + promtail: central log aggregation
+#   - grafana: dashboards (metrics + logs)
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up --build
+# This merges services (worker gains metrics port & labels; new monitoring services appear).
+# -------------------------------------------------------------------------------------------------
+
+services:
+  # Prometheus server ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: observ_prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  # Loki (log storage) --------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: observ_loki
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  # Promtail (log shipper) ----------------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: observ_promtail
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: ["--config.file=/etc/promtail/config.yml"]
+    restart: unless-stopped
+
+  # Grafana (dashboards) ------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.4.5
+    container_name: observ_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+###################################################################################################
+# Notes:
+# - Worker metrics endpoint must be added (e.g., /metrics on :8001) for Prometheus scraping.
+# - Log routing uses promtail docker sd to pick up container logs.
+# - Keep credentials/dev defaults out of production.
+###################################################################################################

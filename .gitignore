@@ -1,0 +1,35 @@
+.env
+.env.*
+!.env.example
+!.github/.env.example
+!.github/deployment/.env.example
+.env copy
+__pycache__/
+*.pyc
+.env.local
+.vscode/
+.DS_Store
+
+# Python virtual environments
+.venv/
+venv/
+*.venv/
+
+# Node.js
+node_modules/
+
+# Generated static sites
+site/
+
+# Prevent committing accidental repo mirror under .github/
+.github/*
+!.github/workflows/
+!.github/workflows/**
+!.github/.env.example
+
+# Ignore debug outputs and transient logs
+debug/test_output.txt
+debug/*.log
+debug/*.txt
+rag_summary.json
+scripts/.last_write_task_id

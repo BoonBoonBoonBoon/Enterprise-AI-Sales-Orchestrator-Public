@@ -1,0 +1,144 @@
+###################################################################################################
+# docker-compose.yml (Annotated)
+# -------------------------------------------------------------------------------------------------
+# Purpose: Define a local development stack consisting of:
+#   - Redis (queue broker using Streams)
+#   - Worker service (consumes jobs from Redis and processes them)
+#   - Optional one-off ingestion CLI container (trigger jobs manually)
+#
+# Why Compose? It orchestrates multiple containers on a single host, wiring networking and
+# environment variable injection so you can simulate distributed behavior locally.
+# -------------------------------------------------------------------------------------------------
+
+# 'version' is deprecated in modern Compose specs but included historically; Docker now ignores it.
+# You can safely remove it; kept here commented for clarity.
+# version: '3.9'
+
+services:
+  #################################################################################################
+  # Redis Service
+  # -----------------------------------------------------------------------------------------------
+  # Lightweight ephemeral Redis instance (no AOF persistence) for local dev/testing. In production
+  # you'd point REDIS_URL at a managed Redis (TLS, persistence, backups) and omit this service.
+  #################################################################################################
+  redis:
+    image: redis:7-alpine                 # Small Redis image footprint
+    container_name: agentic_redis         # Stable name for easier docker exec / logs
+    command: ["redis-server", "--save", "", "--appendonly", "no"]  # Disable RDB + AOF => pure in-memory
+    ports:
+      - "6379:6379"                       # Host port => container port exposure (useful for external CLI inspection)
+    healthcheck:                           # Lets dependent services wait until Redis is ready
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped               # Auto-restart unless explicitly stopped
+    # Only start this service when using the local profile. For Redis Cloud, omit this profile.
+    profiles: ["local"]
+
+  #################################################################################################
+  # Worker Service
+  # -----------------------------------------------------------------------------------------------
+  # Builds the application worker image (or reuses cached layers) and starts a long-lived process
+  # that pulls jobs from Redis Streams. Scale this service for parallel processing.
+  #################################################################################################
+  worker:
+    build:
+      context: .                          # Build context root (sends only needed files per .dockerignore)
+      dockerfile: Dockerfile              # Explicit Dockerfile (default, but stated for clarity)
+    image: agentic/worker:dev             # Tag applied locally after build; can push to registry later
+  # container_name removed to allow scaling multiple replicas without name conflicts
+    env_file:
+      - .env
+    environment:
+      # Runtime secret & config injection (never bake real secrets into the image)
+      SUPABASE_URL: ${SUPABASE_URL}       # Provided via host .env
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}     # Use Cloud if provided, else Compose Redis
+      # Redis Streams configuration
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
+      REDIS_GROUP_WRITERS: ${REDIS_GROUP_WRITERS:-persist-writers}
+      REDIS_STREAM_TASKS_WRITE: ${REDIS_STREAM_TASKS_WRITE:-persist:tasks}
+      REDIS_STREAM_RESULTS_WRITE: ${REDIS_STREAM_RESULTS_WRITE:-persist:results}
+      STREAM_MAXLEN: ${STREAM_MAXLEN:-1000}
+      PERSIST_KIND: ${PERSIST_KIND:-supabase}
+      WORKER_ONCE: ${WORKER_ONCE:-0}
+    # No hard dependency on the local redis service so Cloud can be used seamlessly.
+    command: ["python", "-m", "agent.operational_agents.persistence_agent.write_worker"]
+    restart: unless-stopped               # Resilient to crashes during dev
+    # Scaling (parallel workers) => docker compose up --scale worker=3
+    # When scaling, remove container_name (Compose auto-names worker_1, worker_2, ...).
+
+  #################################################################################################
+  # RAG Worker Service (Streams)
+  # -----------------------------------------------------------------------------------------------
+  # Runs the RAG read worker under Compose so it also points to Redis Cloud via REDIS_URL.
+  # Keep this at a single replica unless you want to fan out RAG queries.
+  #################################################################################################
+  rag_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # Redis Streams configuration (RAG path)
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
+      REDIS_GROUP_WORKERS: ${REDIS_GROUP_WORKERS:-rag-workers}
+      REDIS_STREAM_TASKS: ${REDIS_STREAM_TASKS:-rag:tasks}
+      REDIS_STREAM_RESULTS: ${REDIS_STREAM_RESULTS:-rag:results}
+      STREAM_MAXLEN: ${STREAM_MAXLEN:-1000}
+      PERSIST_KIND: ${PERSIST_KIND:-supabase}
+      WORKER_ONCE: ${WORKER_ONCE:-0}
+      REDIS_DEBUG: ${REDIS_DEBUG:-1}
+    # No depends_on to allow Cloud Redis; if using local profile, Redis will be available as well.
+    command: ["python", "-m", "agent.operational_agents.rag_agent.worker"]
+    restart: unless-stopped
+
+  #################################################################################################
+  # Ingestion CLI (Profile-Gated)
+  # -----------------------------------------------------------------------------------------------
+  # Optional ad-hoc container to enqueue a single ingestion event using the same image build
+  # context (no need to have the worker binary on host). Hidden behind profile so it doesn't run
+  # automatically with the main stack.
+  #################################################################################################
+  ingest_cli:
+    build:
+      context: .
+    entrypoint: ["python", "scripts/ingest_cli.py", "--mode", "ingest"]  # One-shot process then exit
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      QUEUE_BACKEND: redis
+      INGEST_TO_DB: "true"
+    # No depends_on so this tool can run against Redis Cloud when REDIS_URL is set.
+    profiles: ["tools"]                 # Invoke explicitly: `docker compose --profile tools run --rm ingest_cli`
+
+###################################################################################################
+# Usage Summary
+# -------------------------------------------------------------------------------------------------
+# Build + start (foreground logs):
+#   docker compose --env-file .env up --build
+# Scale workers to 3 replicas:
+#   docker compose up --build --scale worker=3
+# One-off ingestion (profile):
+#   docker compose --env-file .env --profile tools run --rm ingest_cli
+# Tail logs:
+#   docker compose logs -f worker
+# Stop & remove containers:
+#   docker compose down
+# -------------------------------------------------------------------------------------------------
+# Production Differences
+# - Omit the redis service (point REDIS_URL to managed Redis instead)
+# - Use an image pulled from a registry (skip build section) 
+# - Provide secrets via your orchestrator's secret manager
+# - Scale using orchestrator (ECS/Kubernetes) rather than Compose `--scale`
+###################################################################################################

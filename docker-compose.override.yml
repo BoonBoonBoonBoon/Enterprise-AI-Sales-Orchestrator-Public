@@ -1,0 +1,5 @@
+# docker-compose.override.yml
+# Intentionally kept minimal to avoid auto-enabling host port mappings that conflict when scaling.
+# Use the optional docker-compose.metrics.yml to expose ports during single-replica dev.
+
+services: {}
