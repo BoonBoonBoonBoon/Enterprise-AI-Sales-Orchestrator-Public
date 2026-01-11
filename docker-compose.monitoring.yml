@@ -2,9 +2,11 @@
 # docker-compose.monitoring.yml
 # -------------------------------------------------------------------------------------------------
 # Extends the base stack with an observability suite:
-#   - prometheus: scrapes metrics from worker(s)
+#   - prometheus: scrapes metrics from worker(s) and health server
+#   - redis-exporter: exposes Redis metrics for Prometheus
+#   - alertmanager: handles alert routing and notifications
 #   - loki + promtail: central log aggregation
-#   - grafana: dashboards (metrics + logs)
+#   - grafana: dashboards (metrics + logs) with pre-configured datasources
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up --build
 # This merges services (worker gains metrics port & labels; new monitoring services appear).
@@ -16,10 +18,58 @@ services:
     image: prom/prometheus:v2.54.0
     container_name: observ_prometheus
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    command: 
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
     ports:
       - "9090:9090"
+    restart: unless-stopped
+
+  # Redis exporter for Prometheus ---------------------------------------------------------------
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: observ_redis_exporter
+    environment:
+      - REDIS_ADDR=agentic_redis:6379
+    ports:
+      - "9121:9121"
+    restart: unless-stopped
+    networks:
+      - agentic-network
+
+  # Custom Redis Streams metrics exporter -------------------------------------------------------
+  stream-exporter:
+    build:
+      context: .
+      dockerfile: monitoring/Dockerfile.stream-exporter
+    container_name: observ_stream_exporter
+    environment:
+      - REDIS_URL=redis://agentic_redis:6379
+      - NAMESPACE=agentic-dev
+      - METRICS_PORT=8000
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - agentic-network
+    profiles:
+      - local
+
+  # Alertmanager (alert routing) -----------------------------------------------------------------
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: observ_alertmanager
+    volumes:
+      - ./monitoring/alertmanager:/etc/alertmanager:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - "9093:9093"
     restart: unless-stopped
 
   # Loki (log storage) --------------------------------------------------------------------------
@@ -45,19 +95,32 @@ services:
   grafana:
     image: grafana/grafana:10.4.5
     container_name: observ_grafana
+    volumes:
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
     ports:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: redis-datasource
     depends_on:
       - prometheus
       - loki
     restart: unless-stopped
 
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:
+
 ###################################################################################################
 # Notes:
 # - Worker metrics endpoint must be added (e.g., /metrics on :8001) for Prometheus scraping.
-# - Log routing uses promtail docker sd to pick up container logs.
+# - Redis exporter provides stream length, consumer lag, and connection metrics.
+# - Alert rules are loaded from monitoring/prometheus/alerts/*.yml
+# - Grafana datasources and dashboards are auto-provisioned from monitoring/grafana/
 # - Keep credentials/dev defaults out of production.
 ###################################################################################################

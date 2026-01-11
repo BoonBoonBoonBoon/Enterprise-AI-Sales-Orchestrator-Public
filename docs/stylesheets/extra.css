@@ -1,0 +1,55 @@
+/* MkDocs Material Theme Customizations */
+
+/* Primary color overrides */
+:root {
+  --md-primary-fg-color: #4f46e5;  /* Indigo 600 */
+  --md-primary-fg-color--light: #818cf8;  /* Indigo 400 */
+  --md-primary-fg-color--dark: #3730a3;  /* Indigo 800 */
+  --md-accent-fg-color: #6366f1;  /* Indigo 500 */
+}
+
+/* Better code block styling */
+.highlight code {
+  font-size: 0.85em;
+}
+
+/* Card hover effects */
+.md-typeset .grid.cards > ul > li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+/* Table improvements */
+.md-typeset table:not([class]) {
+  font-size: 0.8rem;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--md-primary-fg-color);
+  color: white;
+}
+
+/* Admonition customizations */
+.md-typeset .admonition.tip {
+  border-color: #10b981;
+}
+
+.md-typeset .admonition.tip > .admonition-title::before {
+  background-color: #10b981;
+}
+
+/* Architecture diagram styling */
+.md-typeset pre > code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Navigation improvements */
+.md-nav__link--active {
+  font-weight: 600;
+}
+
+/* Footer styling */
+.md-footer-meta {
+  background-color: var(--md-primary-fg-color--dark);
+}

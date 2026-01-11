@@ -1,0 +1,261 @@
+{
+  "dashboard": {
+    "title": "Manager Agent (Tier 1)",
+    "tags": ["tier1", "manager", "agentic"],
+    "timezone": "utc",
+    "editable": true,
+    "graphTooltip": 1,
+    "panels": [
+      {
+        "id": 1,
+        "title": "Decision Rate (per minute)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [{
+          "expr": "rate(manager_decisions_total[1m])",
+          "legendFormat": "{{intent}} - {{tenant}}",
+          "refId": "A"
+        }],
+        "yaxes": [{
+          "format": "ops",
+          "label": "Decisions/sec"
+        }]
+      },
+      {
+        "id": 2,
+        "title": "Latency Distribution (p50, p95, p99)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(manager_latency_ms_bucket[5m]))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(manager_latency_ms_bucket[5m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(manager_latency_ms_bucket[5m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [{
+          "format": "ms",
+          "label": "Latency"
+        }]
+      },
+      {
+        "id": 3,
+        "title": "Execution Path Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+        "targets": [{
+          "expr": "sum by(path) (manager_decisions_total)",
+          "legendFormat": "{{path}}",
+          "refId": "A"
+        }]
+      },
+      {
+        "id": 4,
+        "title": "Intent Distribution (Last Hour)",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+        "targets": [{
+          "expr": "sum by(intent) (increase(manager_decisions_total[1h]))",
+          "legendFormat": "{{intent}}",
+          "refId": "A"
+        }]
+      },
+      {
+        "id": 5,
+        "title": "Fallback Usage Rate",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+        "targets": [{
+          "expr": "sum(rate(manager_fallback_total{used_fallback=\"true\"}[5m])) / sum(rate(manager_decisions_total[5m])) * 100",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 10, "color": "yellow"},
+                {"value": 30, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Confidence Scores Distribution",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(manager_confidence_bucket[5m]))",
+            "legendFormat": "p50 Confidence",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(manager_confidence_bucket[5m]))",
+            "legendFormat": "p95 Confidence",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [{
+          "format": "percentunit",
+          "label": "Confidence",
+          "max": 1,
+          "min": 0
+        }]
+      },
+      {
+        "id": 7,
+        "title": "Cost per Tenant (USD/hour)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [{
+          "expr": "rate(manager_cost_usd[1h])",
+          "legendFormat": "{{tenant}}",
+          "refId": "A"
+        }],
+        "yaxes": [{
+          "format": "currencyUSD",
+          "label": "Cost/hour"
+        }]
+      },
+      {
+        "id": 8,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [{
+          "expr": "rate(manager_errors_total[5m])",
+          "legendFormat": "{{component}} - {{tenant}}",
+          "refId": "A"
+        }],
+        "yaxes": [{
+          "format": "ops",
+          "label": "Errors/sec"
+        }],
+        "alert": {
+          "conditions": [{
+            "evaluator": {"params": [0.1], "type": "gt"},
+            "operator": {"type": "and"},
+            "query": {"params": ["A", "5m", "now"]},
+            "reducer": {"params": [], "type": "avg"},
+            "type": "query"
+          }],
+          "executionErrorState": "alerting",
+          "frequency": "1m",
+          "handler": 1,
+          "name": "Manager Error Rate Alert",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 9,
+        "title": "Recent Decisions (Logs)",
+        "type": "logs",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [{
+          "expr": "{tier=\"manager\",event=\"decision\"}",
+          "refId": "A"
+        }],
+        "options": {
+          "showTime": true,
+          "wrapLogMessage": false,
+          "sortOrder": "Descending"
+        }
+      },
+      {
+        "id": 10,
+        "title": "Top 10 Tenants by Volume",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [{
+          "expr": "topk(10, sum by(tenant) (increase(manager_decisions_total[1h])))",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }],
+        "transformations": [{
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true},
+            "indexByName": {"tenant": 0, "Value": 1},
+            "renameByName": {"tenant": "Tenant", "Value": "Decisions (1h)"}
+          }
+        }]
+      },
+      {
+        "id": 11,
+        "title": "LLM Fallback Usage",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 32},
+        "targets": [{
+          "expr": "sum(increase(manager_decisions_total{reasons=~\".*llm.*\"}[1h]))",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 100, "color": "yellow"},
+                {"value": 1000, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "System Health Status",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 32},
+        "targets": [{
+          "expr": "up{job=\"manager\"}",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}}},
+              {"type": "value", "options": {"1": {"text": "UP", "color": "green"}}}
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 1, "color": "green"}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 27,
+    "style": "dark",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"]
+    },
+    "version": 1
+  }
+}

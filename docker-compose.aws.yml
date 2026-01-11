@@ -1,0 +1,58 @@
+# Docker Compose Override for AWS Secrets Manager
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.aws.yml up
+#
+# Prerequisites:
+#   1. AWS Secrets Manager secret created with all app secrets as JSON
+#   2. IAM role or IAM user with secretsmanager:GetSecretValue permission
+#   3. Secrets stored in JSON format:
+#      {
+#        "OPENAI_API_KEY": "sk-...",
+#        "REDIS_URL": "redis://...",
+#        "SUPABASE_URL": "https://...",
+#        "SUPABASE_KEY": "eyJ..."
+#      }
+#
+# Environment Variables Required:
+#   AWS_REGION=us-east-1
+#   AWS_SECRET_NAME=agentic-system/prod
+#
+# Optional (for IAM user, not needed if using IAM role):
+#   AWS_ACCESS_KEY_ID=AKIA...
+#   AWS_SECRET_ACCESS_KEY=...
+
+version: '3.8'
+
+services:
+  rag_worker:
+    environment:
+      SECRETS_PROVIDER: aws
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_SECRET_NAME: ${AWS_SECRET_NAME:-agentic-system/prod}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+
+  copywriter_worker:
+    environment:
+      SECRETS_PROVIDER: aws
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_SECRET_NAME: ${AWS_SECRET_NAME:-agentic-system/prod}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+
+  persistence_worker:
+    environment:
+      SECRETS_PROVIDER: aws
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_SECRET_NAME: ${AWS_SECRET_NAME:-agentic-system/prod}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+
+  orchestrator:
+    environment:
+      SECRETS_PROVIDER: aws
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_SECRET_NAME: ${AWS_SECRET_NAME:-agentic-system/prod}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}

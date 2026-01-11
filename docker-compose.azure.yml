@@ -1,0 +1,52 @@
+# Docker Compose Override for Azure Key Vault Secrets Management
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.azure.yml up
+#
+# Prerequisites:
+#   1. Azure Key Vault created with secrets
+#   2. Managed identity enabled on host OR service principal credentials
+#   3. Access policy configured for the identity
+#
+# Environment Variables Required:
+#   AZURE_KEY_VAULT_NAME=your-keyvault-name
+#
+# Optional (for service principal):
+#   AZURE_TENANT_ID=your-tenant-id
+#   AZURE_CLIENT_ID=your-client-id
+#   AZURE_CLIENT_SECRET=your-client-secret
+
+version: '3.8'
+
+services:
+  rag_worker:
+    environment:
+      SECRETS_PROVIDER: azure
+      AZURE_KEY_VAULT_NAME: ${AZURE_KEY_VAULT_NAME}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+
+  copywriter_worker:
+    environment:
+      SECRETS_PROVIDER: azure
+      AZURE_KEY_VAULT_NAME: ${AZURE_KEY_VAULT_NAME}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+
+  persistence_worker:
+    environment:
+      SECRETS_PROVIDER: azure
+      AZURE_KEY_VAULT_NAME: ${AZURE_KEY_VAULT_NAME}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+
+  orchestrator:
+    environment:
+      SECRETS_PROVIDER: azure
+      AZURE_KEY_VAULT_NAME: ${AZURE_KEY_VAULT_NAME}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}

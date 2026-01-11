@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: copywriter-worker
+  namespace: agentic-system
+  labels:
+    app: copywriter-worker
+    component: worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: copywriter-worker
+  template:
+    metadata:
+      labels:
+        app: copywriter-worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+      - name: worker
+        image: agentic/worker:latest
+        imagePullPolicy: Always
+        env:
+        - name: SECRETS_PROVIDER
+          value: "aws"
+        - name: AWS_REGION
+          value: "us-east-1"  # UPDATE THIS
+        - name: AWS_SECRET_NAME
+          value: "agentic-system/prod"  # UPDATE THIS
+        envFrom:
+        - configMapRef:
+            name: agentic-config
+        - secretRef:
+            name: agentic-secrets
+        volumeMounts:
+        - name: secrets-store
+          mountPath: "/mnt/secrets-store"
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      volumes:
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "agentic-aws-secrets"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentic-worker
+  namespace: agentic-system
+  annotations:
+    eks.amazonaws.com/role-arn: ""  # UPDATE THIS with your IAM role ARN

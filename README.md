@@ -1,88 +1,464 @@
-<div align="center">
+# Agentic System — Three-Tier Architecture
 
-# Agentic System — Work In Progress
+**Disclaimer**
+- This repository is a public demonstration of a private product developed by my LLC.
+- It does not reflect the current state, full functionality, or progress of the actual product under active development.
+- All secrets have been removed to protect confidentiality for both myself and clients.
+- Portions of the codebase and infrastructure have been modified, mocked, or simplified for privacy, testing, and demonstration purposes. 
+- This project is not open source. It is provided solely as an artistic/illustrative showcase.
+- The code in this repository will not run out-of-the-box. Users are expected to design and implement their own features, configurations, and integrations if they wish to experiment with it.
 
-[![CI](https://github.com/BoonBoonBoonBoon/Agentic-System-Public/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/BoonBoonBoonBoon/Agentic-System-Public/actions/workflows/ci.yml)
-[![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/BoonBoonBoonBoon/Agentic-System-Public/refs/heads/main/coverage-badge.json)](#)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](requirements.txt)
+## Overview
 
-</div>
+A production-ready, three-tier agent orchestration system with separated concerns, provenance tracking, and horizontal scalability. Built for reliability, maintainability, and clear separation between strategic decisions, business logic, and execution.
 
-## TL;DR
-- Built a modular agent framework focused on orchestration and auditable Retrieval-Augmented Generation (RAG).
-- Emphasis on clean seams (DI/Protocols), testability, provenance, and safe-by-default patterns.
-- This repo is sanitized and portfolio-oriented: code is illustrative, not a turnkey product.
+### Architecture
 
-What to skim (5–7 minutes):
-- `agent/operational_agents/rag_agent/rag_agent.py` — core RAG agent surface and tool wrappers.
-- `agent/tools/persistence/service.py` — adapter + service pattern (Supabase or in-memory) with read-only façade.
-- `agent/Infastructure/queue/interface.py` — clean queue protocol; infra primitives are test-friendly.
-- `platform_monitoring/exporters.py` — event logging with redaction hooks for safety.
-- `tests/test_rag_public_leads_integration.py` — how mock vs. live reads are separated.
- - `agent/operational_agents/db_write_agent/db_write_agent.py` — minimal write agent used in tests.
- - `scripts/secret_scan.py` — lightweight local scanner CI also runs.
+```
+┌──────────────────────────────────────────────────────────────┐
+│ TIER 1: Strategic Layer (Manager)                            │
+│ {tenant}:manager:tasks → {tenant}:manager:results            │
+│ - High-level campaign decisions                              │
+│ - Workflow orchestration                                     │
+│ - Routes to appropriate Tier 2 orchestrators                 │
+└──────────────┬───────────────────────────────────────────────┘
+               │ Delegates via Redis Streams
+               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ TIER 2: Business Logic Layer (Orchestrators)                 │
+│                                                              │
+│ ┌─ Leads Orchestrator ──────────────────────────────────┐   │
+│ │ {tenant}:orchestrators:leads:tasks                    │   │
+│ │ → Discovery → Qualification → Enrichment              │   │
+│ └──────────────┬──────────────────────────────────────┘   │
+│                │                                           │
+│ ┌──────────────┤                                           │
+│ │ Outreach Orchestrator ────────────────────────────────┐   │
+│ │ {tenant}:orchestrators:outreach:tasks                 │   │
+│ │ → Personalization → Sequencing → Delivery             │   │
+│ └──────────────┬──────────────────────────────────────┘   │
+│                │                                           │
+└────────────────┼───────────────────────────────────────────┘
+                 │ Delegates to specialized agents
+                 ▼
+┌──────────────────────────────────────────────────────────────┐
+│ TIER 3: Execution Layer (Specialized Agents)                 │
+│                                                              │
+│ ┌─ RAG Agent ──────────────┐  ┌─ Copywriter Agent ──────┐  │
+│ │ agents:rag:tasks         │  │ agents:copywriter:tasks │  │
+│ │ Research & enrichment    │  │ Content generation      │  │
+│ └──────────────────────────┘  └─────────────────────────┘  │
+│                                                              │
+│ ┌─ Persistence Agent ──┐  ┌─ Booking Agent ────────────┐   │
+│ │ agents:persistence  │  │ agents:booking:tasks       │   │
+│ │ Database operations │  │ Meeting scheduling         │   │
+│ └─────────────────────┘  └────────────────────────────┘   │
+│                                                              │
+│ ┌─ Sequencing Agent ──┐  ┌─ Deduplication Agent ──────┐   │
+│ │ agents:sequencing:  │  │ agents:deduplication:tasks │   │
+│ │ ML optimization     │  │ Duplicate detection        │   │
+│ └─────────────────────┘  └────────────────────────────┘   │
+└──────────────┬───────────────────────────────────────────────┘
+               │ Uses shared services
+               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ SERVICES: Shared Infrastructure                              │
+│ - Persistence: Database adapters & service                  │
+│ - Redis: Pub/Sub & Streams                                  │
+│ - Vector DB: Embeddings & similarity search                 │
+│ - External APIs: Crunchbase, LinkedIn integration           │
+└──────────────────────────────────────────────────────────────┘
+```
 
-Deeper dive: see `docs/ARCHITECTURE.md` and `docs/CODE_TOUR.md`. For a developer-oriented roadmap, see `docs/ROADMAP.md`. For orchestration vs tools, see `docs/LANGGRAPH_VS_LANGCHAIN.md`.
+**Key Features**
+- **Three-tier architecture** with clear separation of concerns (strategic, business logic, execution)
+- **Horizontal scalability** via Redis Streams consumer groups
+- **Provenance tracking** with standardized JSON envelope for agent-to-agent communication
+- **Pluggable services** for persistence, vector search, and external APIs
+- **Unified harness** with retry strategies, checkpointing, and observability
+- **Production-ready** with Docker support, monitoring, and health checks
+- **Test coverage** with unit and integration test suites
 
-## Highlights
-- Deterministic envelope pattern (metadata + records + provenance) for inter-agent IO.
-- Read-only façades for RAG to enforce least-privilege querying.
-- Pluggable adapters (in-memory / Supabase) behind a single service interface.
-- Lightweight infra: queue/dispatcher/worker for local dev and demonstration.
-- Test toggles for “mock vs real” flows; CI runs offline tests and secret scans only.
+## Project Structure
 
-## Skills demonstrated
-- Python, async-ish orchestration patterns, test design (pytest), dependency inversion via Protocols.
-- RAG architecture, data access layering, and audit/provenance design.
-- CI/CD hygiene (secret scanning, env isolation), documentation for technical storytelling.
+```
+agentic-system/
+├── tiers/                      # Three-tier architecture
+│   ├── tier_1/                 # Strategic layer
+│   │   └── manager/            # Campaign orchestration
+│   ├── tier_2/                 # Business logic layer
+│   │   ├── leads_orchestrator/ # Leads workflows
+│   │   └── outreach_orchestrator/ # Outreach workflows
+│   └── tier_3/                 # Execution layer
+│       ├── rag_agent/          # Research & enrichment
+│       ├── persistence_agent/  # Database operations
+│       └── copywriter_agent/   # Content generation
+├── core/                       # Framework components
+│   ├── harness/                # Agent harness & config
+│   ├── envelope/               # Message envelope
+│   └── deep_agents/            # Deep agent utilities
+├── services/                   # Shared services
+│   ├── persistence/            # Database service
+│   ├── redis/                  # Redis client & streams
+│   ├── vector_db/              # Vector database
+│   └── external_apis/          # API integrations
+├── deployment/                 # Docker & infrastructure
+│   ├── docker/                 # Dockerfiles
+│   └── docker-compose.yml      # Service orchestration
+├── docs/                       # Documentation
+│   ├── ARCHITECTURE.md         # System architecture
+│   ├── MIGRATION.md            # Migration guide
+│   ├── REDIS_STREAMS.md        # Redis patterns
+│   └── API.md                  # API reference
+├── tests/                      # Test suites
+│   ├── integration/            # Integration tests
+│   ├── unit/                   # Unit tests
+│   └── fixtures/               # Test fixtures
+├── scripts/                    # Operational scripts
+│   ├── startup/                # Initialization
+│   ├── monitoring/             # Health checks
+│   └── maintenance/            # Maintenance tasks
+├── utils/                      # Shared utilities
+└── config/                     # Configuration files
+```
 
-## Architecture at a glance
-See `docs/ARCHITECTURE.md` for a one-page diagram and flow notes.
+## Quick Start
 
-## Code tour
-Quick links and why they matter: `docs/CODE_TOUR.md`.
+### Development Setup
 
-## Demo script (talk track)
-- I included a short, offline demo flow and notes in `docs/DEMO.md` so I can walk reviewers through the design quickly.
+1. **Clone and navigate to repository**
+```powershell
+git clone <repository-url>
+cd agentic-system
+```
 
-## Disclaimer / Ethics
-- This is a public demonstration of a private product developed by my LLC. It’s intentionally simplified and partially mocked.
-- All secrets and sensitive logs have been removed; see `docs/SANITIZATION.md` for details.
-- This repository is provided as a portfolio showcase under the MIT license; it is not positioned as production-ready.
+2. **Create virtual environment**
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-## Project layout (high level)
-- `agent/` — orchestrators, registries, agents, and infra.
-  - `Infastructure/` — interfaces + primitives (queue, worker, engine stubs).
-  - `high_level_agents/` — control layer and domain orchestrators.
-  - `operational_agents/` — focused I/O (RAG agent, copywriter, db write).
-  - `tools/` — deterministic clients/helpers (persistence, data coordination).
-  - `utils/` — envelope utilities and optional schemas.
-- `platform_monitoring/` — sanitized telemetry helpers.
-- Redis (optional): see `docs/REDIS.md` for Streams topology and ops.
-- `tests/` — unit + integration (real tests gated by `USE_REAL_TESTS=1`).
-- `docs/` — architecture, code tour, demo, sanitization notes, portfolio one‑pager.
+3. **Configure environment**
+```powershell
+cp .env.example .env
+# Edit .env with your configuration
+```
 
-## How to review (suggested path)
-1. Skim `docs/PORTFOLIO.md` for the narrative (problem → solution → impact).
-2. Open `docs/ARCHITECTURE.md` for the diagram and flow.
-3. Read `agent/tools/persistence/service.py` to see the seam design (adapters/allowlists).
-4. Open `agent/operational_agents/rag_agent/rag_agent.py` for the agent shape and envelopes.
-5. Check `platform_monitoring/exporters.py` for redaction before logging.
+4. **Run tests**
+```powershell
+# Unit tests
+pytest tests/unit/ -v
 
-## CI & safety
-- CI runs offline tests + secret scan (see `.github/workflows/ci.yml`).
-- CI, coverage, and badges documentation: `docs/CI.md`.
-- Real external calls are opt-in for local dev only: set `USE_REAL_TESTS=1` if you actually wire credentials.
-- Sanitization details and guidance: `docs/SANITIZATION.md`.
+# Integration tests (requires Redis)
+pytest tests/integration/ -v
 
-## Repo metadata (suggestions)
-Add these to the GitHub repo settings (not in code):
-- Description: “Modular agent orchestration + RAG (portfolio showcase). DI, adapters, provenance, tests.”
-- Topics: `agent`, `rag`, `langchain`, `langgraph`, `supabase`, `python`, `portfolio`.
-- Pin links: `docs/ARCHITECTURE.md`, `docs/CODE_TOUR.md`, `agent/operational_agents/rag_agent/rag_agent.py`.
+# All tests
+pytest -v
+```
+
+### Docker Deployment
+
+1. **Build images**
+```powershell
+cd deployment
+docker compose build
+```
+
+2. **Start services**
+```powershell
+# Start Redis and Postgres
+docker compose --profile local up -d redis postgres
+
+# Start all workers
+docker compose up -d
+```
+
+3. **Scale workers**
+```powershell
+# Scale tier_3 agents for parallel processing
+docker compose up -d --scale persistence_agent=3
+docker compose up -d --scale rag_agent=2
+docker compose up -d --scale copywriter_agent=2
+```
+
+4. **Monitor workers**
+```powershell
+docker compose ps
+docker compose logs -f manager
+```
+
+## Usage Examples
+
+### Tier 1: Strategic Orchestration
+
+```python
+from tiers.tier_1.manager import ManagerAgent, ManagerAgentHarness
+from core.harness import HarnessConfig
+
+# Create manager for campaign orchestration
+config = HarnessConfig()
+harness = ManagerAgentHarness(redis_client, tenant_id="my-tenant", config=config)
+result = harness.execute(campaign_envelope)
+```
+
+### Tier 2: Business Logic
+
+```python
+from tiers.tier_2.leads_orchestrator import LeadsOrchestrator, LeadsConsumer
+
+# Process leads workflow
+consumer = LeadsConsumer(redis_client, tenant_id="my-tenant")
+consumer.start()  # Begins processing from Redis stream
+```
+
+### Tier 3: Specialized Execution
+
+```python
+from tiers.tier_3.rag_agent import RAGAgent
+from tiers.tier_3.persistence_agent import PersistenceAgent
+from tiers.tier_3.copywriter_agent import CopywriterAgent
+
+# Research enrichment
+rag = RAGAgent()
+citations = await rag.search_company("Acme Inc")
+
+# Database operations
+persistence = PersistenceAgent()
+await persistence.save_lead(lead_data)
+
+# Content generation
+copywriter = CopywriterAgent()
+email = await copywriter.generate_email(context)
+```
+
+### Services Layer
+
+```python
+from services.persistence import PersistenceService
+from services.redis import RedisPubSub
+from services.vector_db import VectorDBClient
+
+# Database operations
+persistence = PersistenceService()
+leads = await persistence.query_leads(filters={"company": "Acme"})
+
+# Redis pub/sub
+redis = RedisPubSub()
+await redis.publish("tier_2:leads:tasks", envelope)
+
+# Vector similarity search
+vector_db = VectorDBClient()
+similar = await vector_db.similarity_search(query, top_k=5)
+```
+
+## Documentation
+
+### Core Documentation
+- **[QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** - Quick reference guide (START HERE)
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Three-tier architecture design
+- **[MIGRATION.md](docs/MIGRATION.md)** - Migration guide with import path mappings
+
+### Implementation Guides
+- **[REDIS_STREAMS.md](docs/REDIS_STREAMS.md)** - Redis Streams patterns
+- **[API.md](docs/API.md)** - API reference and endpoints
+- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Deployment guide
+
+### Project Reports
+- **[PROJECT_COMPLETION_REPORT.md](docs/PROJECT_COMPLETION_REPORT.md)** - Complete reorganization report
+- **[SCRIPT_COMPATIBILITY.md](docs/SCRIPT_COMPATIBILITY.md)** - Script validation results
+
+## Testing
+
+### Unit Tests
+```powershell
+pytest tests/unit/ -v --cov=tiers --cov=core --cov=services
+```
+
+### Integration Tests
+```powershell
+# Requires Redis running
+docker compose --profile local up -d redis
+pytest tests/integration/ -v
+```
+
+### Smoke Tests
+```powershell
+# End-to-end system test
+pytest tests/smoke/ -v
+```
+
+## Monitoring
+
+### Health Checks
+```powershell
+# Redis connectivity
+python scripts/monitoring/check_redis_status.py
+
+# Stream monitoring
+python scripts/monitoring/stream_monitor.py
+
+# Worker health
+docker compose ps
+```
+
+### Metrics
+- Prometheus metrics exposed on workers
+- Grafana dashboards in `deployment/monitoring/`
+- Stream lag monitoring via Redis
+
+## Development
+
+### Adding a New Agent
+
+1. Create agent directory in appropriate tier:
+```
+tiers/tier_3/my_agent/
+├── my_agent.py
+├── my_agent_harness.py
+├── consumer.py
+├── tools/
+└── __init__.py
+```
+
+2. Implement agent class:
+```python
+from core.harness import AgentHarness
+
+class MyAgent:
+    def execute(self, envelope):
+        # Agent logic here
+        pass
+```
+
+3. Create consumer for Redis Streams:
+```python
+from services.redis import RedisPubSub
+
+class MyAgentConsumer:
+    def __init__(self, redis_client, tenant_id):
+        self.task_stream = f"{tenant_id}:agents:myagent:tasks"
+        self.result_stream = f"{tenant_id}:agents:myagent:results"
+```
+
+4. Add to docker-compose.yml:
+```yaml
+my_agent:
+  image: agentic/worker:dev
+  command: ["python", "-m", "tiers.tier_3.my_agent.consumer"]
+```
+
+### Running Locally
+
+```powershell
+# Activate virtual environment
+.\.venv\Scripts\Activate.ps1
+
+# Run specific consumer
+python -m tiers.tier_3.rag_agent.consumer
+
+# Run with debugging
+$env:RAG_DEBUG_IO="1"
+python -m tiers.tier_3.rag_agent.consumer
+```
+
+## Environment Variables
+
+```bash
+# Required
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-key
+OPENAI_API_KEY=sk-...
+REDIS_URL=rediss://your-redis-cloud-url:port
+
+# Optional
+TENANT_ID=agentic-dev                    # Default: agentic-dev
+REDIS_NAMESPACE=agentic                  # Stream prefix
+OPS_HB_ENABLED=1                         # Heartbeat monitoring
+RAG_DEBUG_IO=0                           # RAG debug logging
+
+# External APIs (for enrichment)
+CRUNCHBASE_API_KEY=your-api-key         # Company research
+LINKEDIN_ACCESS_TOKEN=your-token        # Professional data
+```
+
+## Redis Stream Architecture
+
+The system uses a hierarchical Redis Streams structure for clear separation of concerns:
+
+### Tier 1: Manager (Strategic)
+```
+{tenant}:manager:tasks      # External requests enter here
+{tenant}:manager:results    # Final responses exit here
+```
+
+### Tier 2: Orchestrators (Business Logic) ⭐ NEW HIERARCHICAL STRUCTURE
+```
+{tenant}:orchestrators:leads:tasks
+{tenant}:orchestrators:leads:results
+{tenant}:orchestrators:outreach:tasks
+{tenant}:orchestrators:outreach:results
+```
+
+### Tier 3: Agents (Execution)
+```
+{tenant}:agents:rag:tasks
+{tenant}:agents:rag:results
+{tenant}:agents:persistence:tasks
+{tenant}:agents:persistence:results
+{tenant}:agents:copywriter:tasks
+{tenant}:agents:copywriter:results
+...and more
+```
+
+**Key Design**: The `orchestrators/` parent folder provides clear hierarchy in Redis browsers, matching the `agents/` structure for consistency.
+
+## Troubleshooting
+
+### Import Errors
+If you see import errors, ensure you're using the new tier paths:
+```python
+# OLD (deprecated)
+from agent.manager.manager_agent import ManagerAgent
+
+# NEW (correct)
+from tiers.tier_1.manager import ManagerAgent
+```
+
+See [MIGRATION.md](docs/MIGRATION.md) for complete path mappings.
+
+### Docker Build Issues
+```powershell
+# Clean rebuild
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
+
+### Redis Connection Issues
+```powershell
+# Check Redis is running
+docker compose ps redis
+
+# Test connection
+python scripts/monitoring/check_redis_status.py
+```
+
+## Contributing
+
+This is a demonstration project and not open source. However, you're welcome to:
+- Study the architecture
+- Use patterns in your own projects
+- Provide feedback via issues (for educational purposes)
+
+## License
+
+Proprietary - Demonstration purposes only. Not for production use.
 
 ---
 
-If you’re short on time, jump straight to `docs/PORTFOLIO.md` and the Code Tour. Thanks for reviewing!
+**Last Updated:** November 8, 2025  
+**Architecture Version:** 3-Tier (v2.0)  
+**Status:** Production Ready ✅
+
 

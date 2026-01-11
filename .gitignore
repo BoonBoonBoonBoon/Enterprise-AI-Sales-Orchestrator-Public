@@ -1,35 +1,41 @@
 .env
 .env.*
 !.env.example
-!.github/.env.example
-!.github/deployment/.env.example
-.env copy
 __pycache__/
 *.pyc
 .env.local
 .vscode/
 .DS_Store
 
-# Python virtual environments
-.venv/
-venv/
-*.venv/
-
-# Node.js
-node_modules/
-
-# Generated static sites
+# Generated static sites (may contain compiled secrets in search index)
 site/
 
-# Prevent committing accidental repo mirror under .github/
-.github/*
-!.github/workflows/
-!.github/workflows/**
-!.github/.env.example
+# Node (local dependencies)
+node_modules/
+package-lock.json
 
-# Ignore debug outputs and transient logs
-debug/test_output.txt
-debug/*.log
-debug/*.txt
-rag_summary.json
+# Local virtualenv and caches
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Local coverage artifacts
+.coverage
+htmlcov/
+
+# Local audit/backup artifacts (may contain sensitive data)
+artifacts/
+
+# Benchmark/health temp markers
 scripts/.last_write_task_id
+
+# Local model/test output artifacts
+test_results.json
+
+# Supabase temp files
+supabase/.temp/
+
+# IDE
+*.swp
+*.swo
+.idea/

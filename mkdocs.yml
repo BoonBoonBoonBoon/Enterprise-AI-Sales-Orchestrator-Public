@@ -1,0 +1,176 @@
+# MkDocs Configuration for Agentic System
+# https://www.mkdocs.org/
+
+site_name: Agentic System
+site_description: Enterprise-grade AI Agent Orchestration Platform
+site_author: Elliot
+site_url: https://boonboonboonboon.github.io/Agentic-System/
+
+# Reduce warning noise from legacy/archived docs and avoid README/index conflicts.
+exclude_docs: |
+  ./README.md
+  archive/**
+
+# Repository
+repo_name: BoonBoonBoonBoon/Agentic-System
+repo_url: https://github.com/BoonBoonBoonBoon/Agentic-System
+
+# Theme
+theme:
+  name: material
+  language: en
+  palette:
+    # Light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+# Plugins
+plugins:
+  - search:
+      separator: '[\s\-\.]'
+  - minify:
+      minify_html: true
+
+# Extensions
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: BoonBoonBoonBoon
+      repo: Agentic-System
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Navigation
+nav:
+  - Home: index.md
+  - System Overview: SYSTEM_OVERVIEW.md
+  
+  - Getting Started:
+    - getting-started/README.md
+    - Quick Start: getting-started/quick-start.md
+    - Frontend Access: getting-started/RUNDOWN_AND_FRONTEND_ACCESS.md
+  
+  - Architecture:
+    - architecture/README.md
+    - Complete Reference: COMPLETE_ARCHITECTURE_REFERENCE.md
+    - Redis:
+      - architecture/redis/README.md
+      - Overview: architecture/redis/overview.md
+      - Implementation: architecture/redis/implementation.md
+      - Operations: architecture/redis/operations.md
+    - RAG Architecture: RAG_ARCHITECTURE.md
+  
+  - Tier Documentation:
+    - Tier 1 - Manager: https://github.com/BoonBoonBoonBoon/Agentic-System/blob/master/tiers/tier_1/README.md
+    - Tier 2 - Orchestrators: https://github.com/BoonBoonBoonBoon/Agentic-System/blob/master/tiers/tier_2/README.md
+    - Tier 3 - Agents: https://github.com/BoonBoonBoonBoon/Agentic-System/blob/master/tiers/tier_3/README.md
+  
+  - Guides:
+    - guides/README.md
+    - Testing Protocols: TESTING_PROTOCOLS.md
+    - E2E Testing: E2E_TESTING.md
+    - Quick Test Guide: QUICK_TEST_GUIDE.md
+  
+  - API Reference:
+    - api/reference.md
+    - Rate Limiting: api/rate-limiting.md
+  
+  - Deployment:
+    - deployment/DOCKER_COMPOSE_CONSOLIDATION.md
+    - Redis + Docker Plan: deployment/OUTBOUND_REDIS_DOCKER_PLAN.md
+  
+  - Reference:
+    - reference/quick-reference.md
+    - Message Count Explained: MESSAGE_COUNT_EXPLAINED.md
+    - Orchestrator Isolation: ORCHESTRATOR_ISOLATION_VERIFICATION.md
+    - Type Safety: TYPE_SAFETY.md
+    - Incident Playbooks: INCIDENT_PLAYBOOKS.md
+
+  - Updates:
+    - updates/index.md
+    - Tracing Setup: updates/TRACING_SETUP.md
+    - Enhancements: updates/ENHANCEMENTS.md
+  
+  - Roadmap:
+    - roadmap/current-roadmap.md
+    - MVP Plan: MVP_IMPLEMENTATION_PLAN.md
+
+# Extra
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/BoonBoonBoonBoon
+  generator: false
+
+# Extra CSS
+extra_css:
+  - stylesheets/extra.css
+
+# Extra JavaScript (for math equations if needed)
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js

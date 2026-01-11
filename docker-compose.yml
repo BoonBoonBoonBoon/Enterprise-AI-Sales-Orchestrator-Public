@@ -27,6 +27,8 @@ services:
     command: ["redis-server", "--save", "", "--appendonly", "no"]  # Disable RDB + AOF => pure in-memory
     ports:
       - "6379:6379"                       # Host port => container port exposure (useful for external CLI inspection)
+    volumes:
+      - redis-data:/data                  # Persistent volume for AOF/RDB (if enabled in production)
     healthcheck:                           # Lets dependent services wait until Redis is ready
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -35,6 +37,34 @@ services:
     restart: unless-stopped               # Auto-restart unless explicitly stopped
     # Only start this service when using the local profile. For Redis Cloud, omit this profile.
     profiles: ["local"]
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # PostgreSQL Service (Optional Local DB)
+  # -----------------------------------------------------------------------------------------------
+  # Local PostgreSQL instance for development. In production, use Supabase or managed PostgreSQL.
+  #################################################################################################
+  postgres:
+    image: postgres:15-alpine
+    container_name: agentic_postgres
+    environment:
+      POSTGRES_DB: agentic
+      POSTGRES_USER: agentic
+      POSTGRES_PASSWORD: agentic_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentic"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    profiles: ["local"]
+    networks:
+      - agentic-network
 
   #################################################################################################
   # Worker Service
@@ -64,9 +94,20 @@ services:
       STREAM_MAXLEN: ${STREAM_MAXLEN:-1000}
       PERSIST_KIND: ${PERSIST_KIND:-supabase}
       WORKER_ONCE: ${WORKER_ONCE:-0}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}  # Enable operational heartbeats
     # No hard dependency on the local redis service so Cloud can be used seamlessly.
     command: ["python", "-m", "agent.operational_agents.persistence_agent.write_worker"]
     restart: unless-stopped               # Resilient to crashes during dev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'                    # Limit to 0.5 CPU cores
+          memory: 512M                   # Limit to 512MB RAM
+        reservations:
+          cpus: '0.25'                   # Reserve 0.25 CPU cores
+          memory: 256M                   # Reserve 256MB RAM
+    networks:
+      - agentic-network
     # Scaling (parallel workers) => docker compose up --scale worker=3
     # When scaling, remove container_name (Compose auto-names worker_1, worker_2, ...).
 
@@ -96,10 +137,97 @@ services:
       STREAM_MAXLEN: ${STREAM_MAXLEN:-1000}
       PERSIST_KIND: ${PERSIST_KIND:-supabase}
       WORKER_ONCE: ${WORKER_ONCE:-0}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}  # Enable operational heartbeats
       REDIS_DEBUG: ${REDIS_DEBUG:-1}
     # No depends_on to allow Cloud Redis; if using local profile, Redis will be available as well.
     command: ["python", "-m", "agent.operational_agents.rag_agent.worker"]
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'                    # RAG agent needs more CPU for embeddings
+          memory: 1G                     # Higher memory for vector operations
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    profiles: ["rag"]  # Disabled by default due to LangChain v0.1+ compatibility issues
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Persistence Worker Service (Deep Agent + Harness)
+  # -----------------------------------------------------------------------------------------------
+  # Runs persistence agent with hierarchical streams: {tenant}:agents:persistence:tasks/results
+  #################################################################################################
+  persistence_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      PERSIST_KIND: ${PERSIST_KIND:-supabase}
+      WORKER_ONCE: ${WORKER_ONCE:-0}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+      REDIS_DEBUG: ${REDIS_DEBUG:-1}
+    command: ["python", "-m", "agent.operational_agents.persistence_agent.consumer"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Copywriter Worker Service (Deep Agent + Harness)
+  # -----------------------------------------------------------------------------------------------
+  # Runs copywriter agent with hierarchical streams: {tenant}:agents:copywriter:tasks/results
+  #################################################################################################
+  copywriter_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      WORKER_ONCE: ${WORKER_ONCE:-0}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+      REDIS_DEBUG: ${REDIS_DEBUG:-1}
+    command: ["python", "-m", "agent.operational_agents.copywriter.consumer"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'                   # Copywriter needs CPU for LLM inference
+          memory: 768M                   # Higher memory for model context
+        reservations:
+          cpus: '0.25'
+          memory: 384M
+    networks:
+      - agentic-network
 
   #################################################################################################
   # Ingestion CLI (Profile-Gated)
@@ -108,6 +236,75 @@ services:
   # context (no need to have the worker binary on host). Hidden behind profile so it doesn't run
   # automatically with the main stack.
   #################################################################################################
+  #################################################################################################
+  # Workflow Orchestrator Service
+  # -----------------------------------------------------------------------------------------------
+  # Manages multi-step workflows and coordinates between RAG, Copy, and Persistence workers.
+  #################################################################################################
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+      WORKFLOW_STATE_ENABLED: ${WORKFLOW_STATE_ENABLED:-1}
+      REDIS_DEBUG: ${REDIS_DEBUG:-1}
+    command: ["python", "-m", "agent.orchestrators.workflow_manager"]
+    restart: unless-stopped
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Health Server Service
+  # -----------------------------------------------------------------------------------------------
+  # HTTP endpoint for health checks and operational metrics. Exposes /health, /healthz, /ready,
+  # and /metrics endpoints for monitoring.
+  #################################################################################################
+  health_server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
+    command: ["python", "scripts/health_server.py", "--host", "0.0.0.0", "--port", "8080", "--enable-metrics"]
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Internal Frontend (Streamlit)
+  # -----------------------------------------------------------------------------------------------
+  # Internal admin dashboard for task submission and stream monitoring.
+  #################################################################################################
+  internal_frontend:
+    build:
+      context: ./int-frontend
+      dockerfile: Dockerfile
+    container_name: agentic_frontend
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+    networks:
+      - agentic-network
+
   ingest_cli:
     build:
       context: .
@@ -120,25 +317,48 @@ services:
       QUEUE_BACKEND: redis
       INGEST_TO_DB: "true"
     # No depends_on so this tool can run against Redis Cloud when REDIS_URL is set.
+    networks:
+      - agentic-network
     profiles: ["tools"]                 # Invoke explicitly: `docker compose --profile tools run --rm ingest_cli`
+
+###################################################################################################
+# Volumes & Networks
+# -------------------------------------------------------------------------------------------------
+# Persistent volumes for local data storage and isolated networking
+###################################################################################################
+volumes:
+  redis-data:
+  postgres-data:
+
+networks:
+  agentic-network:
+    driver: bridge
 
 ###################################################################################################
 # Usage Summary
 # -------------------------------------------------------------------------------------------------
 # Build + start (foreground logs):
 #   docker compose --env-file .env up --build
+# Start with local profile (includes Redis + PostgreSQL):
+#   docker compose --profile local --env-file .env up --build
 # Scale workers to 3 replicas:
 #   docker compose up --build --scale worker=3
 # One-off ingestion (profile):
 #   docker compose --env-file .env --profile tools run --rm ingest_cli
+# Check health:
+#   curl http://localhost:8080/health | jq
 # Tail logs:
 #   docker compose logs -f worker
 # Stop & remove containers:
 #   docker compose down
+# Stop & remove volumes (⚠️ deletes data):
+#   docker compose down -v
 # -------------------------------------------------------------------------------------------------
 # Production Differences
 # - Omit the redis service (point REDIS_URL to managed Redis instead)
 # - Use an image pulled from a registry (skip build section) 
 # - Provide secrets via your orchestrator's secret manager
 # - Scale using orchestrator (ECS/Kubernetes) rather than Compose `--scale`
+# - Enable TLS for Redis connections
+# - Configure resource limits and health check timeouts
 ###################################################################################################

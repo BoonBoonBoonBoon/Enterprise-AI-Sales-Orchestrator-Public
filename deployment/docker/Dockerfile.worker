@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1.7
+# Multi-stage build for lean runtime image
+# Updated for new three-tier + services architecture
+
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_DEFAULT_TIMEOUT=100
+
+# Install system deps (add build-essential if native libs required later)
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+    build-essential curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Separate layer for requirements to leverage caching
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt && \
+    pip install -r requirements-dev.txt
+
+# Copy application source - NEW STRUCTURE
+# Core framework and utilities
+COPY core ./core
+
+# Three-tier architecture
+COPY tiers ./tiers
+
+# Services layer
+COPY services ./services
+
+# Configuration and supporting files
+COPY config ./config
+COPY scripts ./scripts
+# Main entry helper (kept at original location under scripts/startup)
+COPY scripts/startup/run_agent.py ./run_agent.py
+COPY README.md ./
+
+# Non-root user (optional; comment out if needing root for debugging)
+RUN useradd -m worker && chown -R worker:worker /app
+USER worker
+
+# Environment defaults (override via docker run / compose)
+ENV QUEUE_BACKEND=redis \
+    WORKER_TOPIC=orchestrate \
+    REDIS_CONSUMER=worker-1
+
+# Expose no ports (worker is a background consumer). Add if HTTP added later.
+# EXPOSE 8000
+
+# Healthcheck (lightweight Redis ping if REDIS_URL present)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD [ "/bin/sh", "-c", "if [ -z \"$REDIS_URL\" ]; then exit 0; fi; python -c \"import os,redis; redis.Redis.from_url(os.environ['REDIS_URL']).ping()\"" ]
+
+# Default command launches the Streams-based persistence worker
+# Updated for new tiers/ structure
+CMD ["python", "-m", "tiers.tier_3.persistence_agent.consumer"]

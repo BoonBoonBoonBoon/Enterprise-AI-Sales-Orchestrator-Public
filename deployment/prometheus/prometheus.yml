@@ -1,0 +1,58 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'agentic-system'
+
+scrape_configs:
+  # Manager metrics
+  - job_name: 'manager'
+    static_configs:
+      - targets: ['manager:8000']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: tier
+        replacement: manager
+
+  # Orchestrators metrics
+  - job_name: 'orchestrators'
+    static_configs:
+      - targets:
+          - 'outreach_orchestrator:8001'
+          - 'leads_orchestrator:8002'
+          - 'audit_orchestrator:8003'
+          - 'inbound_orchestrator:8004'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):.*'
+        target_label: component
+        replacement: '$1'
+      - source_labels: [__address__]
+        target_label: tier
+        replacement: orchestrator
+
+  # Agents metrics
+  - job_name: 'agents'
+    static_configs:
+      - targets:
+          - 'copywriter_agent:8010'
+          - 'persistence_agent:8011'
+          - 'rag_agent:8012'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):.*'
+        target_label: component
+        replacement: '$1'
+      - source_labels: [__address__]
+        target_label: tier
+        replacement: agent
+
+  # Redis exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis_exporter:9121']
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

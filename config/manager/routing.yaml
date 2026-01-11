@@ -1,0 +1,16 @@
+# Default intent to orchestrator mapping for Tier 1 Manager
+# You can override per-tenant by creating:
+#   config/tenants/<tenant_id>/manager_routing.yaml
+
+intents:
+  start_campaign: [control, leads, outreach]
+  lead_enrichment: [leads]
+  outreach: [outreach]
+  audit: [audit]
+  # Inbound email is currently handled by LeadsOrchestrator (deep reply flow + persistence/RAG)
+  # and then chained by Manager to Outbound for Copywriter.
+  inbound: [leads]
+  control: [control]
+
+# When an intent is unknown or has no mapping, send to this orchestrator
+default_fallback_orchestrator: control

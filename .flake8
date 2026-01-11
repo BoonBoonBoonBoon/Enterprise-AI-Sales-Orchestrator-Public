@@ -1,0 +1,45 @@
+[flake8]
+# Maximum line length
+max-line-length = 120
+
+# Exclude patterns
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    build,
+    dist,
+    *.egg-info,
+    .pytest_cache,
+    .mypy_cache,
+    htmlcov,
+    monitoring,
+    k8s,
+    docs
+
+# Ignore specific rules
+ignore =
+    E203,  # Whitespace before ':'
+    E266,  # Too many leading '#' for block comment
+    E501,  # Line too long (handled by max-line-length)
+    W503,  # Line break before binary operator
+    W504,  # Line break after binary operator
+    F401,  # Module imported but unused (in __init__.py)
+    E402,  # Module level import not at top of file
+
+# Error codes to always check
+select = 
+    E,    # pycodestyle errors
+    W,    # pycodestyle warnings
+    F,    # pyflakes
+    C,    # mccabe complexity
+
+# Complexity threshold
+max-complexity = 15
+
+# Per-file ignores
+per-file-ignores =
+    __init__.py:F401,F403
+    tests/*:F401,F811,E501
+    examples/*:F401

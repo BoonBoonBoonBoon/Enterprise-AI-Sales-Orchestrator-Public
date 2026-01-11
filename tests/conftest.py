@@ -35,9 +35,19 @@ def pytest_runtest_setup(item):
     if LIVE_NETWORK_DISABLED and 'live_integration' in item.keywords:
         pytest.skip('Live integration tests disabled by DISABLE_LIVE_INTEGRATION env flag')
 
-# --- CLI options to control RAG debug/capture ------------------------------
+# --- CLI options to control RAG debug/capture & Chaos Testing --------------
 
-def pytest_addoption(parser):  # noqa
+def pytest_addoption(parser):
+    """Add custom pytest options for RAG debugging and chaos testing."""
+    # Chaos testing options
+    parser.addoption(
+        "--chaos-level",
+        action="store",
+        default="low",
+        choices=["low", "medium", "high", "extreme"],
+        help="Chaos testing intensity level"
+    )
+    # RAG debugging options
     parser.addoption(
         "--rag-verbose",
         action="store_true",
@@ -80,6 +90,7 @@ def pytest_addoption(parser):  # noqa
         default=False,
         help="Print full JSON rows for record previews (overrides selected fields)",
     )
+
 
 # --- RAG run capture / summary ---------------------------------------------
 
@@ -179,10 +190,11 @@ def _rag_test_context(request, monkeypatch):
     if rag_deep_debug:
         os.environ.setdefault('RAG_DEEP_DEBUG', '1')
     # Only patch once per session
-    from agent.operational_agents.rag_agent import rag_agent as rag_module
-    RAGAgent = getattr(rag_module, 'RAGAgent')
+    from tiers.tier_3.rag_agent.rag_agent import RAGAgent
 
-    if not getattr(RAGAgent, '_rag_run_patched', False):
+    # New RAG Agent uses async execute() instead of sync run()
+    # Skip patching for new implementation
+    if hasattr(RAGAgent, 'run') and not getattr(RAGAgent, '_rag_run_patched', False):
         original_run = RAGAgent.run
 
         def wrapped(self, *a, **k):  # type: ignore

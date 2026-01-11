@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentic-config
+  namespace: agentic-system
+data:
+  # Operational Configuration
+  OPS_HB_ENABLED: "1"
+  OPS_HB_TTL: "30"
+  OPS_HB_INTERVAL: "10"
+  REDIS_STREAM_MAXLEN: "20000"
+  ENABLE_DLQ: "1"
+  REDIS_MAX_RETRIES: "2"
+  REDIS_RETRY_BACKOFF_MS: "0"
+  REDIS_NAMESPACE: "agentic-prod"
+  
+  # Stream Configuration
+  REDIS_GROUP_WRITERS: "persist-writers"
+  REDIS_GROUP_WORKERS: "rag-workers"
+  REDIS_STREAM_TASKS: "rag:tasks"
+  REDIS_STREAM_RESULTS: "rag:results"
+  REDIS_STREAM_TASKS_WRITE: "persist:tasks"
+  REDIS_STREAM_RESULTS_WRITE: "persist:results"
+  REDIS_STREAM_DLQ: "rag:dlq"
+  REDIS_STREAM_DLQ_WRITE: "persist:dlq"
+  
+  # Worker Configuration
+  PERSIST_KIND: "supabase"
+  WORKER_ONCE: "0"
+  REDIS_DEBUG: "0"
+  
+  # LLM Configuration
+  LLM_PROVIDER: "openai"
+  ENABLE_LEAD_CONTEXT_ENRICHMENT: "1"

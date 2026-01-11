@@ -1,57 +1,100 @@
-# Sanitization & Safety
+# Sanitization Report
 
-**Last Updated:** January 2026  
-**Status:** ✅ Fully Sanitized for Public Release
+**Date:** January 11, 2026  
+**Status:** ✅ Complete
 
-## Scope
-- Public, portfolio-oriented snapshot. Functionality is safe-by-default; external side-effects are disabled.
+---
+
+## Overview
+
+This repository has been sanitized for public release. All sensitive credentials, API keys, and personally identifiable information have been removed or replaced with placeholders.
+
+---
 
 ## What Was Removed/Sanitized
 
-### Deleted Files
-- All `.env` files containing real credentials
-- Generated static site folder (`.github/site/`) containing compiled search index with exposed secrets
+### 1. Environment Files
 
-### Sanitized Content
-- **Supabase project IDs** → `your-project-id`
-- **Redis hosts and passwords** → placeholder values
-- **OpenAI API key references** → `<REDACTED>`
-- **Real email addresses** (bill@gmail.com, wez@gmail.com, Test@gmail.com) → `example-test.com` domain
-- **JWT tokens** → removed or replaced with example structure
-- **Connection strings** → generic placeholder format
+- **Deleted:** `.env` (root) - contained real credentials
+- **Deleted:** `deployment/.env` - contained real credentials
+- **Kept:** `.env.example` files with placeholder values only
 
-### Disabled Features
-- `deliver_data` tool is disabled in public code
-- Real delivery/webhook side-effects removed
-- All external API integrations require explicit opt-in
+### 2. API Keys & Tokens
 
-## Automation
-- CI runs the offline test suite and a lightweight secret scan (`scripts/secret_scan.py`).
-- Monitoring exporters mask token-like values and redact sensitive key names.
+| Type                | Status              | Replaced With            |
+| ------------------- | ------------------- | ------------------------ |
+| OpenAI API Key      | ✅ Removed          | `<REDACTED>` or `sk-...` |
+| Supabase Project ID | ✅ Removed          | `your-project-id`        |
+| Supabase JWTs       | ✅ Removed          | Removed from .env files  |
+| Redis Password      | ✅ Removed          | `<REDIS_PASSWORD>`       |
 
-Local verification
-```powershell
-# run tests and secret scan locally
-python -m pytest -q
-python scripts/secret_scan.py
-```
+### 3. Infrastructure Hostnames
 
-Environment policy
-- `.env` files are ignored via `.gitignore`; never commit secrets.
-- Prefer per-session environment variables in PowerShell when needed:
-```powershell
-$env:SUPABASE_URL="https://example.supabase.co"; $env:SUPABASE_SERVICE_KEY="<key>"
-```
+| Type             | Status     | Replaced With                           |
+| ---------------- | ---------- | --------------------------------------- |
+| Redis Cloud Host | ✅ Removed | `your-redis-host.redns.redis-cloud.com` |
+| Supabase URL     | ✅ Removed | `https://your-project-id.supabase.co`   |
 
-History hygiene (if secrets ever leaked)
-- Rotate leaked keys with the provider.
-- Rewrite history with `git filter-repo` or BFG to purge affected files/lines; then force-push branches.
-- Re-run `scripts/secret_scan.py` on all branches after the rewrite.
+### 4. Email Addresses
 
-Live integrations (opt-in only)
-- Real integration tests are gated by `USE_REAL_TESTS=1` and require explicit env keys.
-- Do not enable these in public CI; use only on private machines for manual verification.
+| Type                     | Status     | Replaced With                |
+| ------------------------ | ---------- | ---------------------------- |
+| Test email addresses     | ✅ Removed | `*.mock@example-test.com`    |
+| Gmail sender credentials | ✅ Removed | Removed entirely             |
 
-Redaction
-- See `platform_monitoring/exporters.py` for key-based redaction and token masking before logs are emitted.
+### 5. Generated Artifacts
 
+- **Deleted:** `site/` folder (MkDocs generated static site containing compiled secrets in search index)
+
+---
+
+## Files Modified
+
+### Documentation Files
+
+- `docs/architecture/services/persistence.md` - Redis credentials sanitized
+- `docs/architecture/supabase/BackendConnection.md` - Supabase project ID sanitized
+- `docs/architecture/supabase/EDGE_FUNCTION_FIX_GUIDE.md` - Supabase URLs sanitized
+- `docs/archive/redis-legacy/redis.md` - Redis URLs and passwords sanitized
+- `docs/archive/redis-legacy/redis-structure.md` - Redis/Supabase references sanitized
+- `docs/getting-started/developer-guide.md` - Email addresses sanitized
+- `docs/getting-started/installation.md` - OpenAI key reference sanitized
+- `docs/getting-started/quick-start.md` - Redis host sanitized
+- `docs/guides/testing/overview.md` - Redis host sanitized
+- `docs/QUICK_TEST_GUIDE.md` - Redis URLs sanitized
+
+### Data Files
+
+- `supabase/seed.sql` - Email addresses sanitized
+- `tests/unit/tier_3/test_rag_real_data_randomized.py` - Email addresses sanitized
+
+### Configuration
+
+- `.gitignore` - Updated to exclude `.env.*` files and `site/` folder
+
+---
+
+## Verification
+
+To verify no sensitive patterns remain, search for:
+- Real Supabase project IDs
+- Real Redis hostnames or passwords  
+- Real personal email addresses (avoid `*@example-test.com` which are placeholders)
+- Real API keys (sk-proj-*, sk-ant-*, etc.)
+
+All source files should only contain placeholder values like `your-project-id`, `your-redis-host`, or `example-test.com`.
+
+---
+
+## For Developers
+
+To set up this project locally:
+
+1. Copy `.env.example` to `.env`
+2. Fill in your own credentials:
+   - Supabase project URL and keys
+   - OpenAI API key
+   - Redis connection URL (local or cloud)
+3. Never commit `.env` files with real values
+
+See `docs/getting-started/installation.md` for detailed setup instructions.

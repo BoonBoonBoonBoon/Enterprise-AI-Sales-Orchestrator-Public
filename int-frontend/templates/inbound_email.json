@@ -1,0 +1,13 @@
+{
+  "goal": "Handle inbound email event and decide actions",
+  "context": {
+    "email_event": {
+      "from": "customer@example.com",
+      "to": "support@example.com",
+      "subject": "Question about pricing tiers",
+      "body": "Hi team, can you clarify the difference between Pro and Enterprise?",
+      "received_at": "2025-12-18T00:00:00Z"
+    },
+    "actions_allowed": ["store", "enrich", "reply"]
+  }
+}

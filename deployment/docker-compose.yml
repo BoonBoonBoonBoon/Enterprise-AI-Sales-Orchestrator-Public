@@ -1,0 +1,442 @@
+###################################################################################################
+# docker-compose.yml (Updated for Three-Tier + Services Architecture)
+# -------------------------------------------------------------------------------------------------
+# Purpose: Define a local development stack consisting of:
+#   - Redis (queue broker using Streams)
+#   - Manager worker (tier_1 - strategic decisions)
+#   - Orchestrators (tier_2 - leads, outreach)
+#   - Agents (tier_3 - RAG, Persistence, Copywriter)
+#   - Services (persistence, vector_db, external_apis, redis)
+#
+# Updated to use new directory structure:
+#   tiers/tier_1/manager/
+#   tiers/tier_2/leads_orchestrator/
+#   tiers/tier_2/outreach_orchestrator/
+#   tiers/tier_3/rag_agent/
+#   tiers/tier_3/persistence_agent/
+#   tiers/tier_3/copywriter_agent/
+#   services/persistence/
+#   services/vector_db/
+#   services/external_apis/
+#   services/redis/
+# -------------------------------------------------------------------------------------------------
+
+services:
+  #################################################################################################
+  # Redis Service
+  # -------------------------------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: agentic_redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # PostgreSQL Service (Optional Local DB)
+  # -------------------------------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: agentic_postgres
+    environment:
+      POSTGRES_DB: agentic
+      POSTGRES_USER: agentic
+      POSTGRES_PASSWORD: agentic_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentic"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # TIER 1: Manager Service (Strategic Decision-Making)
+  # -------------------------------------------------------------------------------------------------
+  # Runs the strategic manager consumer from tiers/tier_1/manager/
+  # Coordinates with tier_2 orchestrators and manages overall system state
+  #################################################################################################
+  manager:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+    command: ["python", "-m", "tiers.tier_1.manager.consumer"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # TIER 2: Leads Orchestrator (Business Logic)
+  # -------------------------------------------------------------------------------------------------
+  # Coordinates leads workflows: discovery → qualification → persistence
+  # Delegates to tier_3 agents
+  #################################################################################################
+  leads_orchestrator:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+    command: ["python", "-m", "tiers.tier_2.leads_orchestrator.consumer"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # TIER 2: Outreach Orchestrator (Business Logic)
+  # -------------------------------------------------------------------------------------------------
+  # Coordinates outreach workflows: copywriting → scheduling → tracking
+  # Delegates to tier_3 agents
+  #################################################################################################
+  outreach_orchestrator:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+    command: ["python", "-m", "tiers.tier_2.outreach_orchestrator.consumer"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # TIER 3: RAG Agent (Operational - Research & Analysis)
+  # -------------------------------------------------------------------------------------------------
+  # Performs semantic search, document retrieval, and context enrichment
+  # Uses services/vector_db/ and services/external_apis/
+  #################################################################################################
+  rag_agent:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+      VECTOR_DB_BACKEND: ${VECTOR_DB_BACKEND:-pinecone}
+    command: ["python", "-m", "tiers.tier_3.rag_agent.consumer"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # TIER 3: Persistence Agent (Operational - Database Operations)
+  # -------------------------------------------------------------------------------------------------
+  # Handles all database write/read operations
+  # Uses services/persistence/ with configurable adapters (Supabase, PostgreSQL, etc.)
+  #################################################################################################
+  persistence_agent:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      PERSIST_KIND: ${PERSIST_KIND:-supabase}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+    command: ["python", "-m", "tiers.tier_3.persistence_agent.consumer"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # TIER 3: Copywriter Agent (Operational - Content Generation)
+  # -------------------------------------------------------------------------------------------------
+  # Generates outreach copy, subject lines, and personalized messaging
+  # Uses OpenAI API and caching
+  #################################################################################################
+  copywriter_agent:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+    command: ["python", "-m", "tiers.tier_3.copywriter_agent.consumer"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # TIER 3: Scheduler Agent (Operational - Booking / Calendar)
+  # -------------------------------------------------------------------------------------------------
+  # Listens on {tenant}:agents:booking:tasks and publishes to {tenant}:agents:booking:results
+  #################################################################################################
+  scheduler_agent:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+    command: ["python", "-m", "tiers.tier_3.scheduler_agent.consumer"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # TIER 3: Channel Sequencer Agent (Operational - Send-Time / Channel Ordering)
+  # -------------------------------------------------------------------------------------------------
+  # Listens on {tenant}:agents:sequencing:tasks and publishes to {tenant}:agents:sequencing:results
+  #################################################################################################
+  channel_sequencer_agent:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+    command: ["python", "-m", "tiers.tier_3.channel_sequencer_agent.consumer"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Health Server Service
+  # -------------------------------------------------------------------------------------------------
+  # HTTP endpoint for health checks and operational metrics
+  # Exposes /health, /healthz, /ready, and /metrics endpoints for monitoring
+  #################################################################################################
+  health_server:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    environment:
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
+    command: ["python", "scripts/health_server.py", "--host", "0.0.0.0", "--port", "8080", "--enable-metrics"]
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Ingestion CLI (Profile-Gated)
+  # -------------------------------------------------------------------------------------------------
+  # Optional ad-hoc container to enqueue jobs manually
+  # Invoke: docker compose --profile tools run --rm ingest_cli
+  #################################################################################################
+  ingest_cli:
+    build:
+      context: ..
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - ../.env
+    entrypoint: ["python", "scripts/ingest_cli.py", "--mode", "ingest"]
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
+      QUEUE_BACKEND: redis
+      INGEST_TO_DB: "true"
+    networks:
+      - agentic-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    profiles: ["tools"]
+
+###################################################################################################
+# Volumes & Networks
+# -------------------------------------------------------------------------------------------------
+volumes:
+  redis-data:
+  postgres-data:
+
+networks:
+  agentic-network:
+    driver: bridge
+
+###################################################################################################
+# Usage Summary
+# -------------------------------------------------------------------------------------------------
+# Start full stack with local services:
+#   docker compose --profile local up -d --build
+#
+# Start just the tier 1/2/3 services (without local Redis/Postgres):
+#   docker compose up -d --build
+#
+# View logs from all services:
+#   docker compose logs -f
+#
+# View logs from specific service:
+#   docker compose logs -f persistence_agent
+#
+# Check health endpoint:
+#   curl http://localhost:8080/health | jq
+#
+# Scale a service:
+#   docker compose up -d --scale persistence_agent=3
+#
+# Stop all services:
+#   docker compose down
+#
+# Stop and remove volumes (WARNING: deletes data):
+#   docker compose down -v
+#
+# One-off CLI operation:
+#   docker compose --profile tools run --rm ingest_cli
+#
+# Production Deployment Notes:
+# -------------------------------------------------------------------------------------------------
+# - Use image from registry (point build.context to prebuilt image)
+# - Provide REDIS_URL pointing to managed Redis (e.g., Redis Cloud, ElastiCache)
+# - Omit local Redis service in production profile
+# - Enable TLS for Redis connections
+# - Use secrets manager (AWS Secrets Manager, HashiCorp Vault) for API keys
+# - Set resource limits (memory, CPU) for each service
+# - Configure horizontal autoscaling based on Redis consumer lag
+# - Enable distributed tracing (OpenTelemetry integration)
+###################################################################################################
