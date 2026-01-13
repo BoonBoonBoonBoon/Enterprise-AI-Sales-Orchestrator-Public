@@ -16,7 +16,7 @@ The Agentic System is a **multi-agent AI platform** that autonomously manages B2
 
   Strategic, business logic, and execution layers with clear separation of concerns.
 
-  [:octicons-arrow-right-24: Architecture](COMPLETE_ARCHITECTURE_REFERENCE.md)
+  [:octicons-arrow-right-24: Architecture](concepts/three-tier-architecture.md)
 
 - :material-message-flash:{ .lg .middle } **Event-Driven Design**
 
@@ -24,15 +24,15 @@ The Agentic System is a **multi-agent AI platform** that autonomously manages B2
 
   Redis Streams power async communication with horizontal scalability via consumer groups.
 
-  [:octicons-arrow-right-24: Redis Architecture](architecture/redis/overview.md)
+  [:octicons-arrow-right-24: Redis Streams](concepts/redis-streams.md)
 
 - :material-robot:{ .lg .middle } **Autonomous Agents**
 
   ***
 
-  Specialized agents for RAG, persistence, copywriting, scheduling, and more.
+  Specialized agents for RAG, persistence, copywriting, and orchestration.
 
-  [:octicons-arrow-right-24: Agent Documentation](https://github.com/BoonBoonBoonBoon/Agentic-System/blob/master/tiers/tier_3/README.md)
+  [:octicons-arrow-right-24: Components](components/index.md)
 
 - :material-security:{ .lg .middle } **Production-Ready**
 
@@ -40,7 +40,7 @@ The Agentic System is a **multi-agent AI platform** that autonomously manages B2
 
   Multi-tenant isolation, RLS, observability, and self-healing reliability patterns.
 
-  [:octicons-arrow-right-24: Deployment Guide](guides/deployment/overview.md)
+  [:octicons-arrow-right-24: Deployment Guide](guides/deploy/docker.md)
 
 </div>
 
@@ -50,22 +50,22 @@ The Agentic System is a **multi-agent AI platform** that autonomously manages B2
 
 ### By Role
 
-| I want to...              | Start here                                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Understand the system** | [System Overview](SYSTEM_OVERVIEW.md)                                                                  |
-| **Run it locally**        | [Quick Start](getting-started/RUNDOWN_AND_FRONTEND_ACCESS.md)                                          |
-| **Extend an agent**       | [Tier 3 Agents](https://github.com/BoonBoonBoonBoon/Agentic-System/blob/master/tiers/tier_3/README.md) |
-| **Deploy to production**  | [Deployment Guide](guides/deployment/overview.md)                                                      |
-| **Write tests**           | [Testing Protocols](TESTING_PROTOCOLS.md)                                                              |
+| I want to...              | Start here                                     |
+| ------------------------- | ---------------------------------------------- |
+| **Understand the system** | [System Overview](concepts/system-overview.md) |
+| **Run it locally**        | [Quick Start](getting-started/quickstart.md)   |
+| **Extend an agent**       | [Adding a New Agent](guides/dev/new-agent.md)  |
+| **Deploy to production**  | [Deployment Guide](guides/deploy/docker.md)    |
+| **Write tests**           | [Testing Guide](guides/dev/testing.md)         |
 
 ### By Topic
 
-| Topic                | Documentation                                                                                                                                        |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Redis Streams**    | [Overview](architecture/redis/overview.md) · [Implementation](architecture/redis/implementation.md) · [Operations](architecture/redis/operations.md) |
-| **RAG Pipeline**     | [RAG Architecture](RAG_ARCHITECTURE.md)                                                                                                              |
-| **Orchestrators**    | [Tier 2 README](https://github.com/BoonBoonBoonBoon/Agentic-System/blob/master/tiers/tier_2/README.md)                                               |
-| **Message Envelope** | [Reference](reference/quick-reference.md)                                                                                                            |
+| Topic                | Documentation                                                                   |
+| -------------------- | ------------------------------------------------------------------------------- |
+| **Redis Streams**    | [Concept](concepts/redis-streams.md) · [Stream Keys](reference/api/streams.md)  |
+| **RAG Pipeline**     | [RAG Agent](components/tier-3/rag.md)                                           |
+| **Orchestrators**    | [Leads](components/tier-2/leads.md) · [Outreach](components/tier-2/outreach.md) |
+| **Message Envelope** | [Concept](concepts/envelope.md) · [Schema](reference/api/envelope.md)           |
 
 ---
 
@@ -80,14 +80,14 @@ The Agentic System is a **multi-agent AI platform** that autonomously manages B2
           ┌────────────────────┼────────────────────┐
           ▼                    ▼                    ▼
 ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐
-│ Leads Orch.     │  │ Outreach Orch.  │  │ Control Orch.       │
-│ Discovery/Qual  │  │ Personalization │  │ Campaign Management │
+│ Leads Orch.     │  │ Outreach Orch.  │  │ Inbound Orch.       │
+│ Discovery/Qual  │  │ Personalization │  │ Reply Processing    │
 └────────┬────────┘  └────────┬────────┘  └──────────┬──────────┘
          │                    │                      │
          ▼                    ▼                      ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  TIER 3: Specialized Agents                                     │
-│  RAG · Persistence · Copywriter · Scheduler · Sequencer · ...   │
+│  RAG · Persistence · Copywriter                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -112,28 +112,27 @@ The Agentic System is a **multi-agent AI platform** that autonomously manages B2
 === "Docker"
 
     ```bash
-    cd deployment
-    docker compose up -d redis postgres
-    docker compose up -d
+    docker-compose up -d
     ```
 
 === "Production"
 
-See the full [Deployment Guide](guides/deployment/overview.md) for Kubernetes setup.
+    See the full [Deployment Guide](guides/deploy/kubernetes.md) for Kubernetes setup.
 
 ---
 
 ## Documentation Status
 
-| Section                | Status         |
-| ---------------------- | -------------- |
-| Architecture           | ✅ Complete    |
-| Tier 1 (Manager)       | ✅ Complete    |
-| Tier 2 (Orchestrators) | ✅ Complete    |
-| Tier 3 (Agents)        | ✅ Complete    |
-| Services               | ✅ Complete    |
-| API Reference          | 🔄 In Progress |
-| Deployment             | 🔄 In Progress |
+| Section         | Status      |
+| --------------- | ----------- |
+| Getting Started | ✅ Complete |
+| Concepts        | ✅ Complete |
+| Components      | ✅ Complete |
+| Guides          | ✅ Complete |
+| Reference       | ✅ Complete |
+| Architecture    | ✅ Complete |
+| ADRs            | ✅ Complete |
+| Roadmap         | ✅ Complete |
 
 ---
 

@@ -4,7 +4,7 @@
 site_name: Agentic System
 site_description: Enterprise-grade AI Agent Orchestration Platform
 site_author: Elliot
-site_url: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
+site_url: https://boonboonboonboon.github.io/Agentic-System/
 
 # Reduce warning noise from legacy/archived docs and avoid README/index conflicts.
 exclude_docs: |
@@ -12,8 +12,8 @@ exclude_docs: |
   archive/**
 
 # Repository
-repo_name: BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
-repo_url: https://github.com/BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
+repo_name: BoonBoonBoonBoon/Agentic-System
+repo_url: https://github.com/BoonBoonBoonBoon/Agentic-System
 
 # Theme
 theme:
@@ -106,57 +106,103 @@ markdown_extensions:
 # Navigation
 nav:
   - Home: index.md
-  - System Overview: SYSTEM_OVERVIEW.md
   
   - Getting Started:
-    - getting-started/README.md
-    - Quick Start: getting-started/quick-start.md
-    - Frontend Access: getting-started/RUNDOWN_AND_FRONTEND_ACCESS.md
+    - getting-started/index.md
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Environment Setup: getting-started/environment.md
+    - Your First Task: getting-started/first-task.md
   
-  - Architecture:
-    - architecture/README.md
-    - Complete Reference: COMPLETE_ARCHITECTURE_REFERENCE.md
-    - Redis:
-      - architecture/redis/README.md
-      - Overview: architecture/redis/overview.md
-      - Implementation: architecture/redis/implementation.md
-      - Operations: architecture/redis/operations.md
-    - RAG Architecture: RAG_ARCHITECTURE.md
+  - Concepts:
+    - concepts/index.md
+    - System Overview: concepts/system-overview.md
+    - Three-Tier Architecture: concepts/three-tier-architecture.md
+    - Message Envelope: concepts/envelope.md
+    - Redis Streams: concepts/redis-streams.md
+    - Agent Harness: concepts/agent-harness.md
+    - Multi-Tenancy: concepts/multi-tenancy.md
   
-  - Tier Documentation:
-    - Tier 1 - Manager: https://github.com/BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public/blob/main/tiers/tier_1/README.md
-    - Tier 2 - Orchestrators: https://github.com/BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public/blob/main/tiers/tier_2/README.md
-    - Tier 3 - Agents: https://github.com/BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public/blob/main/tiers/tier_3/README.md
+  - Components:
+    - components/index.md
+    - Tier 1 - Manager:
+      - components/tier-1/index.md
+      - Manager Agent: components/tier-1/manager.md
+      - Policy Router: components/tier-1/router.md
+      - Intent Classification: components/tier-1/intent.md
+    - Tier 2 - Orchestrators:
+      - components/tier-2/index.md
+      - Leads Orchestrator: components/tier-2/leads.md
+      - Outreach Orchestrator: components/tier-2/outreach.md
+      - Inbound Orchestrator: components/tier-2/inbound.md
+    - Tier 3 - Agents:
+      - components/tier-3/index.md
+      - RAG Agent: components/tier-3/rag.md
+      - Persistence Agent: components/tier-3/persistence.md
+      - Copywriter Agent: components/tier-3/copywriter.md
+    - Services:
+      - components/services/index.md
+      - Redis Service: components/services/redis.md
+      - Persistence Service: components/services/persistence.md
+      - Vector DB: components/services/vector-db.md
+      - Email Service: components/services/email.md
   
   - Guides:
-    - guides/README.md
-    - Testing Protocols: TESTING_PROTOCOLS.md
-    - E2E Testing: E2E_TESTING.md
-    - Quick Test Guide: QUICK_TEST_GUIDE.md
-  
-  - API Reference:
-    - api/reference.md
-    - Rate Limiting: api/rate-limiting.md
-  
-  - Deployment:
-    - deployment/DOCKER_COMPOSE_CONSOLIDATION.md
-    - Redis + Docker Plan: deployment/OUTBOUND_REDIS_DOCKER_PLAN.md
+    - guides/index.md
+    - Development:
+      - Adding a New Agent: guides/dev/new-agent.md
+      - Adding an Orchestrator: guides/dev/new-orchestrator.md
+      - Writing Tests: guides/dev/testing.md
+      - LLM Integration: guides/dev/llm-integration.md
+    - Operations:
+      - Running Consumers: guides/ops/consumers.md
+      - Monitoring: guides/ops/monitoring.md
+      - Troubleshooting: guides/ops/troubleshooting.md
+      - Incident Response: guides/ops/incident-response.md
+    - Deployment:
+      - Docker Compose: guides/deploy/docker.md
+      - Kubernetes: guides/deploy/kubernetes.md
+      - CI/CD: guides/deploy/ci-cd.md
+      - Secrets Management: guides/deploy/secrets.md
   
   - Reference:
-    - reference/quick-reference.md
-    - Message Count Explained: MESSAGE_COUNT_EXPLAINED.md
-    - Orchestrator Isolation: ORCHESTRATOR_ISOLATION_VERIFICATION.md
-    - Type Safety: TYPE_SAFETY.md
-    - Incident Playbooks: INCIDENT_PLAYBOOKS.md
-
-  - Updates:
-    - updates/index.md
-    - Tracing Setup: updates/TRACING_SETUP.md
-    - Enhancements: updates/ENHANCEMENTS.md
+    - reference/index.md
+    - API:
+      - Envelope Schema: reference/api/envelope.md
+      - Stream Keys: reference/api/streams.md
+      - Agent Payloads: reference/api/payloads.md
+    - Configuration:
+      - Environment Variables: reference/config/env-vars.md
+      - Harness Options: reference/config/harness.md
+      - Settings: reference/config/settings.md
+    - Database:
+      - Schema Reference: reference/database/schema.md
+      - RLS Policies: reference/database/rls.md
+      - Migrations: reference/database/migrations.md
+    - CLI:
+      - Scripts Reference: reference/cli/scripts.md
+      - Consumer Commands: reference/cli/consumers.md
+  
+  - Architecture:
+    - architecture/index.md
+    - System Design: architecture/design.md
+    - Data Flow: architecture/data-flow.md
+    - Communication Rules: architecture/communication.md
+    - Security Model: architecture/security.md
+    - Decisions (ADRs):
+      - architecture/decisions/index.md
+      - ADR-001 Three-Tier Architecture: architecture/decisions/001-three-tier-architecture.md
+      - ADR-002 Vertical Communication: architecture/decisions/002-vertical-only-communication.md
+      - ADR-003 Redis Streams: architecture/decisions/003-redis-streams-over-queues.md
+      - ADR-004 Supabase RLS: architecture/decisions/004-supabase-rls-3-layer-auth.md
+      - ADR-005 Agent Harness: architecture/decisions/005-agent-harness-pattern.md
+      - ADR-006 LangGraph: architecture/decisions/006-langgraph-deep-agents.md
   
   - Roadmap:
-    - roadmap/current-roadmap.md
-    - MVP Plan: MVP_IMPLEMENTATION_PLAN.md
+    - roadmap/index.md
+    - In Progress: roadmap/in-progress.md
+    - Future Plans: roadmap/future.md
+    - Changelog: roadmap/changelog.md
 
 # Extra
 extra:

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Redis Health Check API
 
@@ -24,7 +24,7 @@ Returns:
         "status": "healthy" | "degraded" | "unhealthy",
         "timestamp": "2025-01-26T10:30:00Z",
         "namespace": "agentic-dev",
-        "connection": {"status": "ok", "url": "redis://..."},
+        "connection": {"status": "ok", "url": "redis://<REDACTED_REDIS_URL>"},
         "streams": {
             "rag:tasks": {"length": 3, "pending": 0, "consumers": 1, ...},
             ...
@@ -492,3 +492,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

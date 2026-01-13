@@ -1,4 +1,4 @@
-import os
+﻿import os
 import random
 import pytest
 from datetime import datetime, timezone
@@ -52,7 +52,7 @@ LEAD_EM = {
     "id": "b9722cc0-18ad-45c2-9a6e-ae0ce068d33d",
     "client_id": "592c9b4c-77be-4303-ad46-1ffb1ede127e",
     "campaign_id": "9646f98a-e987-4a8c-b786-9b82ea985d38",
-    "email": "test.mock@example-test.com",
+    "email": "Test.mock@example-test.com",
     "first_name": "em",
     "last_name": "em",
     "company_name": "em",
@@ -162,3 +162,4 @@ def test_randomized_multiple_queries(rag_agent_real_like):
         assert env["metadata"]["total_count"] >= 1
         seen += 1
     assert seen == 5
+

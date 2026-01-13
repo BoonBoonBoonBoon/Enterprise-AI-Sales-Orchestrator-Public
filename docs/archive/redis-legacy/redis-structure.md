@@ -1,4 +1,4 @@
-how Redis can back your whole system: manager → orchestrator → low-level agents → health → auditing. I also included a ready-to-commit doc you can drop into the repo.
+﻿how Redis can back your whole system: manager â†’ orchestrator â†’ low-level agents â†’ health â†’ auditing. I also included a ready-to-commit doc you can drop into the repo.
 
 High-level flows
 - Command path
@@ -6,8 +6,8 @@ High-level flows
   - Orchestrator consumes commands, expands into tasks (orchestrator:tasks).
   - Orchestrator routes tasks to the right worker streams (rag:tasks, persist:tasks).
 - Worker paths
-  - RAG workers consume rag:tasks → publish rag:results.
-  - Persist workers consume persist:tasks → write DB → publish persist:results.
+  - RAG workers consume rag:tasks â†’ publish rag:results.
+  - Persist workers consume persist:tasks â†’ write DB â†’ publish persist:results.
 - Observability
   - Every step emits audit events (audit:events) and tracing spans (audit:spans).
   - Services heartbeat via ops:hb:{service}:{id} and emit health changes to ops:health.
@@ -54,15 +54,15 @@ Ops conventions
 - Consumer groups
   - cm-managers, orchestrators, rag-workers, persist-writers, auditors, ops
 - Trimming
-  - Streams use MAXLEN ~ 20k–100k depending on volume (prevent unbounded growth).
+  - Streams use MAXLEN ~ 20kâ€“100k depending on volume (prevent unbounded growth).
 - Idempotency
   - SETNX agentic-dev:locks:idemp:{stream}:{msg_id} with TTL to dedupe replays.
 - Heartbeats
-  - SETEX agentic-dev:ops:hb:{service}:{id} 30 "1" every 10–15s. Health page reads keys with TTL > 0.
+  - SETEX agentic-dev:ops:hb:{service}:{id} 30 "1" every 10â€“15s. Health page reads keys with TTL > 0.
 - DLQ
   - On final failure: XADD agentic-dev:persist:dlq with error context; alert from there.
 
-CLI/health you’ll use often
+CLI/health youâ€™ll use often
 - XINFO STREAM agentic-dev:persist:tasks
 - XINFO GROUPS agentic-dev:rag:tasks
 - XPENDING agentic-dev:rag:tasks rag-workers
@@ -78,30 +78,30 @@ Namespace: `agentic-dev` (from REDIS_NAMESPACE)
 ## Streams and Groups
 
 - cm (Campaign Manager)
-  - `agentic-dev:cm:commands` (STREAM) — group=`cm-managers`
-  - `agentic-dev:cm:events` (STREAM) — group=`cm-subscribers`
+  - `agentic-dev:cm:commands` (STREAM) â€” group=`cm-managers`
+  - `agentic-dev:cm:events` (STREAM) â€” group=`cm-subscribers`
 
 - orchestrator
-  - `agentic-dev:orchestrator:commands` (STREAM) — group=`orchestrators`
-  - `agentic-dev:orchestrator:tasks` (STREAM) — group=`orchestrators`
-  - `agentic-dev:orchestrator:results` (STREAM) — no group
+  - `agentic-dev:orchestrator:commands` (STREAM) â€” group=`orchestrators`
+  - `agentic-dev:orchestrator:tasks` (STREAM) â€” group=`orchestrators`
+  - `agentic-dev:orchestrator:results` (STREAM) â€” no group
 
 - RAG workers
-  - `agentic-dev:rag:tasks` (STREAM) — group=`rag-workers`
-  - `agentic-dev:rag:results` (STREAM) — no group
+  - `agentic-dev:rag:tasks` (STREAM) â€” group=`rag-workers`
+  - `agentic-dev:rag:results` (STREAM) â€” no group
   - Cache (optional): `agentic-dev:cache:rag:chunks:{doc_id}` (HASH, TTL)
 
 - Persistence workers
-  - `agentic-dev:persist:tasks` (STREAM) — group=`persist-writers`
-  - `agentic-dev:persist:results` (STREAM) — no group
-  - DLQ: `agentic-dev:persist:dlq` (STREAM) — group=`dlq-readers`
+  - `agentic-dev:persist:tasks` (STREAM) â€” group=`persist-writers`
+  - `agentic-dev:persist:results` (STREAM) â€” no group
+  - DLQ: `agentic-dev:persist:dlq` (STREAM) â€” group=`dlq-readers`
 
 - Audit and tracing
-  - `agentic-dev:audit:events` (STREAM) — group=`auditors`
-  - `agentic-dev:audit:spans` (STREAM) — group=`auditors`
+  - `agentic-dev:audit:events` (STREAM) â€” group=`auditors`
+  - `agentic-dev:audit:spans` (STREAM) â€” group=`auditors`
 
 - Operations
-  - `agentic-dev:ops:health` (STREAM) — group=`ops`
+  - `agentic-dev:ops:health` (STREAM) â€” group=`ops`
   - `agentic-dev:ops:hb:{service}:{id}` (STRING, TTL=30s)
   - `agentic-dev:ops:stats:{service}:m:{yyyymmddhhmm}` (HASH)
 
@@ -110,19 +110,19 @@ Namespace: `agentic-dev` (from REDIS_NAMESPACE)
 
 ## End-to-end flow
 
-1. Campaign Manager → `cm:commands`
+1. Campaign Manager â†’ `cm:commands`
 2. Orchestrator consumes, emits `orchestrator:tasks` and routes to:
    - RAG: `rag:tasks`
    - Persistence: `persist:tasks`
 3. Workers process and emit results:
-   - RAG → `rag:results`
-   - Persistence → `persist:results`
-4. Audit logs for each step → `audit:events`, spans → `audit:spans`
+   - RAG â†’ `rag:results`
+   - Persistence â†’ `persist:results`
+4. Audit logs for each step â†’ `audit:events`, spans â†’ `audit:spans`
 5. Health:
    - Workers heartbeat `ops:hb:{service}:{id}`
-   - State changes → `ops:health`
+   - State changes â†’ `ops:health`
 6. Failures:
-   - Retries with backoff; final failures → `persist:dlq` (and optionally `rag:dlq`)
+   - Retries with backoff; final failures â†’ `persist:dlq` (and optionally `rag:dlq`)
 
 ## Message envelopes (examples)
 
@@ -147,7 +147,7 @@ Namespace: `agentic-dev` (from REDIS_NAMESPACE)
 - Idempotency:
   - Before processing, `SETNX locks:idemp:{stream}:{msg_id} = 1` with short TTL.
 - Heartbeats:
-  - `SETEX ops:hb:{service}:{id} 30 1` every 10–15s; UI shows keys with TTL>0.
+  - `SETEX ops:hb:{service}:{id} 30 1` every 10â€“15s; UI shows keys with TTL>0.
 - DLQ handling:
   - Alert on new entries; provide requeue tooling (`XAUTOCLAIM` + enqueue).
 
@@ -163,7 +163,7 @@ Namespace: `agentic-dev` (from REDIS_NAMESPACE)
 ----------------- ------------------------------------- ----------------------------------
 
 
-# 🏗️ Complete Agentic System Architecture Explained
+# ðŸ—ï¸ Complete Agentic System Architecture Explained
 
 ## Overview
 
@@ -171,26 +171,26 @@ You have a **three-tier agentic orchestration system** built on Redis Streams th
 
 ---
 
-## 🎯 The Three Tiers
+## ðŸŽ¯ The Three Tiers
 
 ### **Tier 1: Manager Agent** (Strategic Orchestrator)
 **Role:** Entry point for all external requests. Makes high-level decisions about which orchestrators to use.
 
 **Streams:**
-- `agentic-dev:manager:tasks` ← External requests arrive here
-- `agentic-dev:manager:results` → Final results published here
+- `agentic-dev:manager:tasks` â† External requests arrive here
+- `agentic-dev:manager:results` â†’ Final results published here
 
 **What it does:**
 ```
 External Request: "Find 50 AI startups and create outreach campaign"
-    ↓
+    â†“
 Manager analyzes goal
-    ↓
+    â†“
 Manager decides: "This needs BOTH leads discovery AND outreach"
-    ↓
+    â†“
 Delegates to Tier 2:
-    ├─ XADD agentic-dev:leads:tasks (find leads)
-    └─ XADD agentic-dev:outreach:tasks (create campaign)
+    â”œâ”€ XADD agentic-dev:leads:tasks (find leads)
+    â””â”€ XADD agentic-dev:outreach:tasks (create campaign)
 ```
 
 **Configuration:**
@@ -207,8 +207,8 @@ Delegates to Tier 2:
 **Role:** Discovers, validates, and manages leads database
 
 **Streams:**
-- `agentic-dev:leads:tasks` ← Receives delegations from Manager
-- `agentic-dev:leads:results` → Publishes results back
+- `agentic-dev:leads:tasks` â† Receives delegations from Manager
+- `agentic-dev:leads:results` â†’ Publishes results back
 
 **8 Tools:**
 
@@ -227,13 +227,13 @@ Delegates to Tier 2:
 **Example Flow:**
 ```
 Manager delegates: "Find tech leads in SF"
-    ↓
+    â†“
 Leads Orchestrator receives task
-    ↓
+    â†“
 Decides: "Query database for tech companies in SF"
-    ↓
+    â†“
 Uses query_leads tool
-    ↓
+    â†“
 Returns 50 leads to Manager
 ```
 
@@ -249,8 +249,8 @@ Returns 50 leads to Manager
 **Role:** Coordinates multi-channel outreach campaigns
 
 **Streams:**
-- `agentic-dev:outreach:tasks` ← Receives delegations from Manager
-- `agentic-dev:outreach:results` → Publishes results back
+- `agentic-dev:outreach:tasks` â† Receives delegations from Manager
+- `agentic-dev:outreach:results` â†’ Publishes results back
 
 **8 Tools:**
 
@@ -268,21 +268,21 @@ Returns 50 leads to Manager
 
 **Multi-Channel Strategy:**
 ```
-Email (Day 0) → LinkedIn (Day 3) → Phone (Day 7) → Follow-up (Day 10)
+Email (Day 0) â†’ LinkedIn (Day 3) â†’ Phone (Day 7) â†’ Follow-up (Day 10)
 ```
 
 **Example Flow:**
 ```
 Manager delegates: "Create campaign for 50 leads"
-    ↓
+    â†“
 Outreach Orchestrator receives task
-    ↓
+    â†“
 Decides: "Need email copy, then schedule sequence"
-    ↓
+    â†“
 Step 1: Delegates to Copywriter (generate emails)
-    ↓
+    â†“
 Step 2: Uses schedule_touchpoint (Day 0, Day 3, Day 7)
-    ↓
+    â†“
 Returns campaign plan to Manager
 ```
 
@@ -308,7 +308,7 @@ These are called by Tier 2 orchestrators for specific tasks.
 
 ---
 
-## 🔄 Complete Flow Example
+## ðŸ”„ Complete Flow Example
 
 **User Request:** "Find 100 tech leads in SF and create email campaign"
 
@@ -319,7 +319,7 @@ These are called by Tier 2 orchestrators for specific tasks.
        "goal": "Find 100 tech leads in SF and create email campaign",
        "filters": {"industry": "tech", "location": "SF"}
    }
-   ↓
+   â†“
 
 2. TIER 1: MANAGER (Strategic Decision)
    Receives: agentic-dev:manager:tasks
@@ -328,11 +328,11 @@ These are called by Tier 2 orchestrators for specific tasks.
    - "First find leads, then create campaign"
    
    Publishes to:
-   ├─ agentic-dev:leads:tasks
-   │  {"goal": "Find 100 tech leads in SF", "task_id": "abc-123"}
-   └─ agentic-dev:outreach:tasks
+   â”œâ”€ agentic-dev:leads:tasks
+   â”‚  {"goal": "Find 100 tech leads in SF", "task_id": "abc-123"}
+   â””â”€ agentic-dev:outreach:tasks
       {"goal": "Create campaign", "depends_on": "abc-123"}
-   ↓
+   â†“
 
 3. TIER 2A: LEADS ORCHESTRATOR (Lead Discovery)
    Reads: agentic-dev:leads:tasks
@@ -342,7 +342,7 @@ These are called by Tier 2 orchestrators for specific tasks.
    - "Delegate to RAG agent to enrich from external sources"
    
    Publishes to:
-   └─ agentic-dev:rag:tasks
+   â””â”€ agentic-dev:rag:tasks
       {"goal": "Find 58 more tech leads in SF", "task_id": "abc-123-rag"}
    
    RAG Agent (Tier 3):
@@ -350,9 +350,9 @@ These are called by Tier 2 orchestrators for specific tasks.
    - Returns 60 enriched leads
    
    Leads publishes result:
-   └─ agentic-dev:leads:results
+   â””â”€ agentic-dev:leads:results
       {"task_id": "abc-123", "leads": [...102 leads...], "status": "completed"}
-   ↓
+   â†“
 
 4. TIER 2B: OUTREACH ORCHESTRATOR (Campaign Creation)
    Reads: agentic-dev:outreach:tasks
@@ -363,9 +363,9 @@ These are called by Tier 2 orchestrators for specific tasks.
    - "Delegate to Copywriter for personalized emails"
    
    Publishes to:
-   ├─ agentic-dev:copywriter:tasks
-   │  {"goal": "Generate 102 personalized emails", "leads": [...]}
-   └─ agentic-dev:booking:tasks
+   â”œâ”€ agentic-dev:copywriter:tasks
+   â”‚  {"goal": "Generate 102 personalized emails", "leads": [...]}
+   â””â”€ agentic-dev:booking:tasks
       {"goal": "Check availability for 102 meetings"}
    
    Copywriter Agent (Tier 3):
@@ -377,7 +377,7 @@ These are called by Tier 2 orchestrators for specific tasks.
    - Suggests meeting times
    
    Outreach publishes result:
-   └─ agentic-dev:outreach:results
+   â””â”€ agentic-dev:outreach:results
       {
           "task_id": "abc-456",
           "campaign_id": "camp-789",
@@ -389,15 +389,15 @@ These are called by Tier 2 orchestrators for specific tasks.
           ],
           "status": "scheduled"
       }
-   ↓
+   â†“
 
 5. TIER 1: MANAGER (Result Aggregation)
    Manager waits for both results:
-   ✅ agentic-dev:leads:results (102 leads found)
-   ✅ agentic-dev:outreach:results (campaign created)
+   âœ… agentic-dev:leads:results (102 leads found)
+   âœ… agentic-dev:outreach:results (campaign created)
    
    Publishes final result:
-   └─ agentic-dev:manager:results
+   â””â”€ agentic-dev:manager:results
       {
           "task_id": "master-001",
           "status": "completed",
@@ -406,7 +406,7 @@ These are called by Tier 2 orchestrators for specific tasks.
           "touchpoints_scheduled": 356,
           "estimated_completion": "2025-11-20"
       }
-   ↓
+   â†“
 
 6. EXTERNAL API RESPONSE
    GET /api/results/master-001
@@ -415,7 +415,7 @@ These are called by Tier 2 orchestrators for specific tasks.
 
 ---
 
-## 🛡️ Agent Harness (Layer 1: Reliability)
+## ðŸ›¡ï¸ Agent Harness (Layer 1: Reliability)
 
 Every agent is wrapped with a **universal harness** that provides production features:
 
@@ -463,11 +463,11 @@ config = HarnessConfig.for_production()
 
 ---
 
-## 🔧 Redis Configuration (Your .env)
+## ðŸ”§ Redis Configuration (Your .env)
 
 ```bash
 # Redis Cloud Connection
-REDIS_URL=redis://default:6uf8...@your-redis-host.redns.redis-cloud.com:15143/0
+REDIS_URL=redis://<REDACTED_REDIS_URL>
 REDIS_NAMESPACE=agentic-dev  # Tenant isolation
 
 # Stream Configuration
@@ -491,38 +491,38 @@ OPENAI_API_KEY=sk-proj-...
 
 # Supabase (Database)
 SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_KEY=eyJhbGci...
+SUPABASE_KEY=<SUPABASE_JWT>
 ```
 
 ---
 
-## 📊 Current Stream Topology
+## ðŸ“Š Current Stream Topology
 
 ### **Active Streams (Tier 1 & 2):**
 ```
-agentic-dev:manager:tasks       ← External entry point
-agentic-dev:manager:results     → Final results
+agentic-dev:manager:tasks       â† External entry point
+agentic-dev:manager:results     â†’ Final results
 
-agentic-dev:leads:tasks         ← Manager delegates here
-agentic-dev:leads:results       → Leads results
+agentic-dev:leads:tasks         â† Manager delegates here
+agentic-dev:leads:results       â†’ Leads results
 
-agentic-dev:outreach:tasks      ← Manager delegates here
-agentic-dev:outreach:results    → Outreach results
+agentic-dev:outreach:tasks      â† Manager delegates here
+agentic-dev:outreach:results    â†’ Outreach results
 ```
 
 ### **To Be Built (Tier 3):**
 ```
-agentic-dev:copywriter:tasks/results      ⏳ Email generation
-agentic-dev:booking:tasks/results         ⏳ Meeting scheduling
-agentic-dev:sequencing:tasks/results      ⏳ ML optimization
-agentic-dev:rag:tasks/results            ⏳ Enrichment
-agentic-dev:persistence:tasks/results     ⏳ Bulk operations
-agentic-dev:deduplication:tasks/results   ⏳ Duplicate detection
+agentic-dev:copywriter:tasks/results      â³ Email generation
+agentic-dev:booking:tasks/results         â³ Meeting scheduling
+agentic-dev:sequencing:tasks/results      â³ ML optimization
+agentic-dev:rag:tasks/results            â³ Enrichment
+agentic-dev:persistence:tasks/results     â³ Bulk operations
+agentic-dev:deduplication:tasks/results   â³ Duplicate detection
 ```
 
 ---
 
-## 🚀 How to Run
+## ðŸš€ How to Run
 
 **Start All Consumers:**
 ```powershell
@@ -557,30 +557,30 @@ results = r.xread({"agentic-dev:manager:results": "0"}, count=10)
 
 ---
 
-## 🎯 Key Design Principles
+## ðŸŽ¯ Key Design Principles
 
 1. **Universal Harness** - ONE wrapper works with ALL agents
 2. **Plugin Architecture** - Swap components without code changes
 3. **Graceful Degradation** - Optional dependencies handled cleanly
 4. **Environment-Specific** - Dev uses simple logging, prod uses Datadog
-5. **Cost-Conscious** - Swap backends (Redis→S3) without code changes
+5. **Cost-Conscious** - Swap backends (Redisâ†’S3) without code changes
 6. **Future-Proof** - New orchestrators just wrap, no harness changes
 
 ---
 
-## 📈 What's Working Now
+## ðŸ“ˆ What's Working Now
 
-✅ **Manager Agent** - Receives requests, delegates to orchestrators
-✅ **Leads Orchestrator** - 8 tools, database operations
-✅ **Outreach Orchestrator** - 8 tools, campaign coordination
-✅ **Agent Harness** - 11 component implementations
-✅ **Redis Streams** - Manager successfully delegating to Leads
-✅ **Consumer Groups** - Horizontal scaling ready
-✅ **Deep Agents** - LangChain integration working
+âœ… **Manager Agent** - Receives requests, delegates to orchestrators
+âœ… **Leads Orchestrator** - 8 tools, database operations
+âœ… **Outreach Orchestrator** - 8 tools, campaign coordination
+âœ… **Agent Harness** - 11 component implementations
+âœ… **Redis Streams** - Manager successfully delegating to Leads
+âœ… **Consumer Groups** - Horizontal scaling ready
+âœ… **Deep Agents** - LangChain integration working
 
 ---
 
-## 🔜 What's Next
+## ðŸ”œ What's Next
 
 1. **Build Tier 3 Agents** - Copywriter, Booking, Sequencing, etc.
 2. **End-to-End Testing** - Full campaign flow validation
@@ -588,4 +588,5 @@ results = r.xread({"agentic-dev:manager:results": "0"}, count=10)
 4. **Monitoring Dashboard** - Real-time stream metrics
 5. **API Gateway** - REST API for external requests
 
-**Your system is a production-grade orchestration framework that can coordinate unlimited AI agents through Redis Streams!** 🚀
+**Your system is a production-grade orchestration framework that can coordinate unlimited AI agents through Redis Streams!** ðŸš€
+

@@ -1,4 +1,4 @@
-# Docker Compose Override for AWS Secrets Manager
+﻿# Docker Compose Override for AWS Secrets Manager
 #
 # Usage:
 #   docker-compose -f docker-compose.yml -f docker-compose.aws.yml up
@@ -9,9 +9,9 @@
 #   3. Secrets stored in JSON format:
 #      {
 #        "OPENAI_API_KEY": "sk-...",
-#        "REDIS_URL": "redis://...",
+#        "REDIS_URL": "redis://<REDACTED_REDIS_URL>",
 #        "SUPABASE_URL": "https://...",
-#        "SUPABASE_KEY": "eyJ..."
+#        "SUPABASE_KEY": "<SUPABASE_JWT>"
 #      }
 #
 # Environment Variables Required:
@@ -56,3 +56,4 @@ services:
       AWS_SECRET_NAME: ${AWS_SECRET_NAME:-agentic-system/prod}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+

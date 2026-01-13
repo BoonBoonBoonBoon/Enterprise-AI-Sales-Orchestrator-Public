@@ -1,4 +1,4 @@
-apiVersion: 1
+﻿apiVersion: 1
 
 datasources:
   - name: Prometheus
@@ -31,10 +31,11 @@ datasources:
   - name: Redis
     type: redis-datasource
     access: proxy
-    url: redis://agentic_redis:6379
+    url: redis://<REDACTED_REDIS_URL>
     editable: false
     jsonData:
       client: standalone
       poolSize: 5
       timeout: 10
       pingInterval: 0
+

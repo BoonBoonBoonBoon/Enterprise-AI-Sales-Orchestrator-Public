@@ -319,7 +319,7 @@ source .venv/bin/activate  # Linux/Mac
 # Set environment
 export REDIS_URL=redis://localhost:6379
 export SUPABASE_URL=https://xxx.supabase.co
-export SUPABASE_KEY=eyJ...
+export SUPABASE_KEY=<SUPABASE_JWT>
 ```
 
 ### Execute

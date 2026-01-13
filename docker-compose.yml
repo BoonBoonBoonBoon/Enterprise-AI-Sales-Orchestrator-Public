@@ -1,4 +1,4 @@
-###################################################################################################
+﻿###################################################################################################
 # docker-compose.yml (Annotated)
 # -------------------------------------------------------------------------------------------------
 # Purpose: Define a local development stack consisting of:
@@ -85,7 +85,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}       # Provided via host .env
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}     # Use Cloud if provided, else Compose Redis
+      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>     # Use Cloud if provided, else Compose Redis
       # Redis Streams configuration
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
       REDIS_GROUP_WRITERS: ${REDIS_GROUP_WRITERS:-persist-writers}
@@ -128,7 +128,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
       # Redis Streams configuration (RAG path)
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
       REDIS_GROUP_WORKERS: ${REDIS_GROUP_WORKERS:-rag-workers}
@@ -170,7 +170,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -208,7 +208,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -249,7 +249,7 @@ services:
     env_file:
       - .env
     environment:
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
       WORKFLOW_STATE_ENABLED: ${WORKFLOW_STATE_ENABLED:-1}
@@ -273,7 +273,7 @@ services:
     env_file:
       - .env
     environment:
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
     command: ["python", "scripts/health_server.py", "--host", "0.0.0.0", "--port", "8080", "--enable-metrics"]
     ports:
@@ -313,7 +313,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
       QUEUE_BACKEND: redis
       INGEST_TO_DB: "true"
     # No depends_on so this tool can run against Redis Cloud when REDIS_URL is set.
@@ -351,7 +351,7 @@ networks:
 #   docker compose logs -f worker
 # Stop & remove containers:
 #   docker compose down
-# Stop & remove volumes (⚠️ deletes data):
+# Stop & remove volumes (âš ï¸ deletes data):
 #   docker compose down -v
 # -------------------------------------------------------------------------------------------------
 # Production Differences
@@ -362,3 +362,4 @@ networks:
 # - Enable TLS for Redis connections
 # - Configure resource limits and health check timeouts
 ###################################################################################################
+

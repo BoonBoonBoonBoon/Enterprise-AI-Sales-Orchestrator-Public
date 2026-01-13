@@ -1,18 +1,16 @@
 .env
-.env.*
-!.env.example
 __pycache__/
 *.pyc
 .env.local
 .vscode/
 .DS_Store
 
-# Generated static sites (may contain compiled secrets in search index)
-site/
-
 # Node (local dependencies)
 node_modules/
 package-lock.json
+
+# MkDocs build output
+site/
 
 # Local virtualenv and caches
 .venv/

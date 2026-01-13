@@ -1,0 +1,204 @@
+I'll launch a research agent to comprehensively audit the current documentation, understand the actual system architecture, and identify what's outdated vs. essential—then present you with a detailed plan. 
+
+Audit docs and system architecture
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/mkdocs.yml#1-1), lines 1 to 150
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/core)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/services)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_1)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_2)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_3)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/SYSTEM_OVERVIEW.md#1-1), lines 1 to 150
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/core/README.md)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/services/README.md)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_1/manager)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_2/leads_orchestrator)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_3/rag_agent)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/COMPLETE_ARCHITECTURE_REFERENCE.md#1-1), lines 1 to 200
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/README.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/getting-started)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/architecture)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/guides)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/archive)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/deployment)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/api)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/reference)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/debugging)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/migration)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/updates)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/scripts)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tests)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/RAG_ARCHITECTURE.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/DOCUMENTATION_INDEX.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/index.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/archive/DOCUMENTATION_AUDIT.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tests/README.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_1/manager/readme.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_2/README.md)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_3/README.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_3/persistence_agent)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_3/copywriter_agent)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/config)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/scripts/README.md#1-1), lines 1 to 80
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/requirements.txt)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/deployment/README.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/core/harness)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/architecture/redis)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/architecture/supabase)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/architecture/components)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/roadmap)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/TESTING_PROTOCOLS.md)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/guides/deployment)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/guides/development)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/guides/testing)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/guides/operations)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/E2E_TESTING.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/MVP_IMPLEMENTATION_PLAN.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/INCIDENT_PLAYBOOKS.md)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/TYPE_SAFETY.md)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/docs/getting-started/quick-start.md#1-1), lines 1 to 100
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_2/outreach_orchestrator)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/tiers/tier_2/inbound_orchestrator)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/config/settings.py)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/core/streams.py)
+
+Read [](file:///c%3A/Users/Elliot/Desktop/Agency%20Files/Important/Technicals/Agentic%20System/core/envelope/typed_envelope.py#1-1), lines 1 to 80
+
+## Plan: Industry-Standard MkDocs Documentation Overhaul
+
+Restructure documentation around user journey (Getting Started → Concepts → Components → Guides → Reference), consolidating duplicates, archiving stale files, and filling critical gaps—modeled after Stripe/Twilio/FastAPI patterns.
+
+---
+
+### Steps
+
+1. **Archive outdated & irrelevant docs** → Move ~15 stale files (migration plans, historical audits, external refs like `reference/project-cv.md`, `reference/sdr-langgraph.md`) into archive and exclude from nav.
+
+2. **Consolidate duplicative content** → Merge 4 overlapping architecture docs into single concepts/three-tier-architecture.md; merge 3 Redis stream docs into one; unify 3 testing guides into one.
+
+3. **Create new top-level nav structure** → Replace current nav in mkdocs.yml with 7 sections: **Home**, **Getting Started**, **Concepts**, **Components**, **Guides**, **Reference**, **Architecture/Roadmap**.
+
+4. **Write missing critical docs**:
+   - getting-started/environment.md — ALL env vars with examples
+   - guides/dev/new-agent.md — step-by-step adding Tier 3 agent
+   - guides/dev/new-orchestrator.md — adding Tier 2 orchestrator
+   - reference/database/schema.md — complete table/FK/RLS reference
+   - reference/api/envelope.md — `TaskEnvelope`/`ResultEnvelope` API
+   - guides/ops/troubleshooting.md — common errors + solutions
+
+5. **Rewrite/update key existing docs** → Refresh SYSTEM_OVERVIEW.md, COMPLETE_ARCHITECTURE_REFERENCE.md, RAG_ARCHITECTURE.md to remove stale paths and add current component inventory.
+
+6. **Create component landing pages** → Add index files for each tier: components/tier-1/index.md, components/tier-2/index.md, components/tier-3/index.md, components/services/index.md.
+
+---
+
+### Proposed Nav Structure
+
+```yaml
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Overview: getting-started/index.md
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Environment Setup: getting-started/environment.md
+  - Concepts:
+    - Three-Tier Architecture: concepts/three-tier-architecture.md
+    - Message Envelope: concepts/envelope.md
+    - Redis Streams: concepts/redis-streams.md
+    - Agent Harness: concepts/agent-harness.md
+    - Multi-Tenancy: concepts/multi-tenancy.md
+  - Components:
+    - Tier 1 - Manager: components/tier-1/index.md
+    - Tier 2 - Orchestrators: components/tier-2/index.md
+    - Tier 3 - Agents: components/tier-3/index.md
+    - Services: components/services/index.md
+  - Guides:
+    - Adding a New Agent: guides/dev/new-agent.md
+    - Adding an Orchestrator: guides/dev/new-orchestrator.md
+    - Writing Tests: guides/dev/testing.md
+    - Running Consumers: guides/ops/consumers.md
+    - Troubleshooting: guides/ops/troubleshooting.md
+    - Incident Response: guides/ops/incident-response.md
+    - Docker Deployment: guides/deploy/docker.md
+  - Reference:
+    - Envelope Schema: reference/api/envelope.md
+    - Stream Keys: reference/api/streams.md
+    - Environment Variables: reference/config/env-vars.md
+    - Database Schema: reference/database/schema.md
+    - CLI Scripts: reference/cli/scripts.md
+  - Architecture: architecture/design.md
+  - Roadmap: roadmap.md
+```
+
+---
+
+### Further Considerations
+
+1. **Archive vs. Delete?** I recommend archiving (move to archive, excluded from nav) rather than deleting—preserves history. Confirm?
+
+2. **Skeleton components (Inbound Orchestrator, Scheduler Agent, etc.)?** Document them as "placeholder/roadmap" or omit until implemented?
+
+3. **Want ADRs (Architecture Decision Records)?** Industry best practice for capturing *why* decisions were made—I can add an `architecture/decisions/` folder if valuable.
