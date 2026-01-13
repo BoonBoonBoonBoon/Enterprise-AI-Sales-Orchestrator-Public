@@ -24,21 +24,24 @@ deployment/
 ### Setup
 
 1. **Clone and enter the workspace:**
+
    ```bash
    cd "c:\Users\Elliot\Desktop\Agency Files\Important\Technicals\Agentic System"
    ```
 
 2. **Create environment file from template:**
+
    ```bash
    cp deployment/.env.example .env
    ```
 
 3. **Edit `.env` with your API keys:**
+
    ```bash
    # Required
    OPENAI_API_KEY=sk-...
    SUPABASE_URL=https://...supabase.co
-  SUPABASE_KEY=<SUPABASE_JWT>
+   SUPABASE_KEY=<SUPABASE_JWT>
 
    # Optional (for production or advanced features)
    VECTOR_DB_BACKEND=pinecone
@@ -46,6 +49,7 @@ deployment/
    ```
 
 4. **Build and start services:**
+
    ```bash
    # Start with local Redis + PostgreSQL
    docker compose --profile local up -d --build
@@ -64,12 +68,14 @@ deployment/
 The deployment is organized into three tiers + services:
 
 ### Tier 1: Manager (Strategic)
+
 - **Container:** `manager`
 - **Role:** Coordinates system strategy and flow
 - **Module:** `tiers.tier_1.manager.consumer`
 - **Responsibilities:** Route tasks, manage state, orchestrate tier_2
 
 ### Tier 2: Orchestrators (Business Logic)
+
 - **Containers:** `leads_orchestrator`, `outreach_orchestrator`
 - **Role:** Coordinate domain-specific workflows
 - **Modules:**
@@ -78,6 +84,7 @@ The deployment is organized into three tiers + services:
 - **Responsibilities:** Delegate to tier_3 agents, manage workflow state
 
 ### Tier 3: Agents (Operational)
+
 - **Containers:** `rag_agent`, `persistence_agent`, `copywriter_agent`
 - **Role:** Execute specialized tasks
 - **Modules:**
@@ -87,12 +94,14 @@ The deployment is organized into three tiers + services:
 - **Responsibilities:** Perform unit tasks, interact with services
 
 ### Services Layer
+
 - **Persistence Service** (`services/persistence/`) - Database adapters (Supabase, PostgreSQL, Snowflake)
 - **Redis Service** (`services/redis/`) - Pub/Sub and Streams with consumer groups
 - **Vector DB Service** (`services/vector_db/`) - Multi-backend similarity search (Pinecone, Weaviate)
 - **External APIs Service** (`services/external_apis/`) - CrunchBase, LinkedIn, custom APIs
 
 ### Infrastructure
+
 - **Redis:** Message broker for Streams-based async communication
 - **PostgreSQL:** Primary database (optional local, typically Supabase in dev)
 - **Health Server:** Exposes `/health`, `/healthz`, `/ready`, `/metrics` endpoints
@@ -153,6 +162,7 @@ docker compose exec manager python -c "import tiers; print(tiers.__file__)"
 Key variables for each deployment scenario:
 
 ### Local Development
+
 ```env
 REDIS_URL=redis://<REDACTED_REDIS_URL>      # Local compose Redis
 SUPABASE_URL=                         # Leave empty or use dev Supabase
@@ -160,6 +170,7 @@ VECTOR_DB_BACKEND=in-memory          # Fast, no external dependency
 ```
 
 ### Staging (Cloud Services)
+
 ```env
 REDIS_URL=redis://<REDACTED_REDIS_URL>   # Redis Cloud
 SUPABASE_URL=https://...supabase.co  # Supabase staging project
@@ -168,6 +179,7 @@ OTEL_ENABLED=1                        # Enable tracing
 ```
 
 ### Production (High Availability)
+
 ```env
 REDIS_URL=redis://<REDACTED_REDIS_URL>    # Managed Redis with TLS
 SUPABASE_URL=https://...supabase.co  # Supabase production project
@@ -183,6 +195,7 @@ See `deployment/.env.example` for the complete list of variables.
 **Location:** `deployment/docker/Dockerfile.worker`
 
 The Dockerfile is a multi-stage build that:
+
 1. Installs Python 3.11 runtime and dependencies
 2. Copies application source (core/, tiers/, services/, config/)
 3. Creates non-root `worker` user for security
@@ -221,11 +234,13 @@ grep REDIS_URL .env
 If agents log errors like DNS resolution failures when calling Supabase, first verify the **Supabase project URL hostname actually exists**.
 
 On Windows (host machine):
+
 ```powershell
 Resolve-DnsName <your-project-ref>.supabase.co
 ```
 
 If that fails (NXDOMAIN), your `SUPABASE_URL` is wrong (or the project was deleted). Copy the correct URL from **Supabase Dashboard â†’ Settings â†’ API** and restart the stack:
+
 ```bash
 docker compose -f deployment/docker-compose.yml up -d
 ```
@@ -299,28 +314,28 @@ spec:
         tier: tier-1
     spec:
       containers:
-      - name: manager
-        image: agentic/worker:latest
-        env:
-        - name: REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: redis-secrets
-              key: url
-        command: ["python", "-m", "tiers.tier_1.manager.consumer"]
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
+        - name: manager
+          image: agentic/worker:latest
+          env:
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secrets
+                  key: url
+          command: ["python", "-m", "tiers.tier_1.manager.consumer"]
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
 ```
 
 ### ECS Example
@@ -342,7 +357,10 @@ spec:
       "memory": 1024,
       "cpu": 512,
       "healthCheck": {
-        "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ],
         "interval": 30,
         "timeout": 5,
         "retries": 3
@@ -355,6 +373,7 @@ spec:
 ## Support
 
 For issues:
+
 1. Check logs: `docker compose logs -f [service]`
 2. Verify `.env` configuration
 3. Ensure Redis/DB connectivity
@@ -366,4 +385,3 @@ For issues:
 **Last Updated:** Task 15 - Deployment directory creation  
 **Architecture:** Three-tier + services (Tasks 1-14 complete)  
 **Status:** Ready for development and production deployment
-
