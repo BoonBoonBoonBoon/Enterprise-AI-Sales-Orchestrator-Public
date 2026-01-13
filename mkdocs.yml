@@ -4,7 +4,7 @@
 site_name: Agentic System
 site_description: Enterprise-grade AI Agent Orchestration Platform
 site_author: Elliot
-site_url: https://boonboonboonboon.github.io/Agentic-System/
+site_url: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
 
 # Reduce warning noise from legacy/archived docs and avoid README/index conflicts.
 exclude_docs: |
@@ -12,8 +12,8 @@ exclude_docs: |
   archive/**
 
 # Repository
-repo_name: BoonBoonBoonBoon/Agentic-System
-repo_url: https://github.com/BoonBoonBoonBoon/Agentic-System
+repo_name: BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
+repo_url: https://github.com/BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
 
 # Theme
 theme:
@@ -89,7 +89,7 @@ markdown_extensions:
   - pymdownx.magiclink:
       repo_url_shorthand: true
       user: BoonBoonBoonBoon
-      repo: Agentic-System
+      repo: Enterprise-AI-Sales-Orchestrator-Public
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.superfences:
