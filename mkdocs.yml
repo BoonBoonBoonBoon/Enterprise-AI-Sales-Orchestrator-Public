@@ -6,10 +6,10 @@ site_description: Enterprise-grade AI Agent Orchestration Platform
 site_author: Elliot
 site_url: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
 
-# Reduce warning noise from legacy/archived docs and avoid README/index conflicts.
-exclude_docs: |
-  ./README.md
-  archive/**
+# Reduce warning noise from README/index conflicts.
+# Note: `docs/archive/**` is included so archived reference pages are published.
+# If you want to hide the legacy archive from the public site, remove the
+# following 'archive' entries from the `nav` or move them under a private folder.
 
 # Repository
 repo_name: BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
