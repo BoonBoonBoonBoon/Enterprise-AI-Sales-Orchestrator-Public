@@ -254,6 +254,12 @@ similar = await vector_db.similarity_search(query, top_k=5)
 
 ## Documentation
 
+The best and most up-to-date documentation lives on the published site:
+
+- https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
+
+The Markdown files in this repo are still useful for reference, but may lag behind the site.
+
 ### Core Documentation
 - **[QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** - Quick reference guide (START HERE)
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Three-tier architecture design
