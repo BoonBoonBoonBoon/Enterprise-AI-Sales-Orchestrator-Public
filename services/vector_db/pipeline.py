@@ -17,12 +17,14 @@ Usage:
 import logging
 import json
 import hashlib
+import asyncio
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 
 try:
     from services.vector_db import VectorDBClient
     from services.vector_db.embeddings import EmbeddingsProvider
+    from services.vector_db.config import get_config
 except ImportError:
     try:
         from agent.tools.vector_db.client import VectorDBClient
@@ -30,6 +32,10 @@ except ImportError:
     except ImportError:
         VectorDBClient = None
         EmbeddingsProvider = None
+    try:
+        from agent.tools.vector_db.config import get_config
+    except ImportError:
+        get_config = None
 
 try:
     from config.rag_entities import EntityType, get_text_fields
@@ -76,7 +82,28 @@ class EmbeddingPipeline:
         if vector_db_client:
             self.vector_db = vector_db_client
         elif VectorDBClient:
-            self.vector_db = VectorDBClient(backend="in_memory")
+            backend = "in_memory"
+            api_key = None
+            environment = None
+            index_name = "agentic-default"
+
+            if get_config:
+                cfg = get_config()
+                backend = cfg.vector_db_type or backend
+                api_key = cfg.pinecone_api_key or None
+                environment = cfg.pinecone_environment or None
+                index_name = cfg.pinecone_index or index_name
+
+            if backend not in ("pinecone", "weaviate", "in_memory"):
+                logger.warning(f"Unknown VECTOR_DB_TYPE '{backend}', falling back to in_memory")
+                backend = "in_memory"
+
+            self.vector_db = VectorDBClient(
+                backend=backend,
+                api_key=api_key,
+                environment=environment,
+                index_name=index_name,
+            )
         else:
             logger.warning("VectorDBClient not available - vector operations will fail")
             self.vector_db = None
@@ -174,7 +201,11 @@ class EmbeddingPipeline:
         
         # Generate embedding
         try:
-            embedding = await self.embeddings.embed_text(text)
+            embed_result = self.embeddings.embed_text(text)
+            if asyncio.iscoroutine(embed_result):
+                embedding = await embed_result
+            else:
+                embedding = embed_result
             
             # Cache result
             if use_cache and self.redis and embedding:
@@ -240,7 +271,15 @@ class EmbeddingPipeline:
         # Generate embeddings for uncached texts
         if uncached_texts:
             try:
-                new_embeddings = await self.embeddings.embed_texts(uncached_texts)
+                embed_batch_fn = getattr(self.embeddings, "embed_texts", None) or getattr(self.embeddings, "embed_batch", None)
+                if not embed_batch_fn:
+                    raise RuntimeError("EmbeddingsProvider does not support batch embedding")
+
+                batch_result = embed_batch_fn(uncached_texts)
+                if asyncio.iscoroutine(batch_result):
+                    new_embeddings = await batch_result
+                else:
+                    new_embeddings = batch_result
                 
                 # Cache and assign results
                 for i, embedding in zip(uncached_indices, new_embeddings):

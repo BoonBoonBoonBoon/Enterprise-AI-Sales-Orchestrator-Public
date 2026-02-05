@@ -28,7 +28,22 @@ data:
   PERSIST_KIND: "supabase"
   WORKER_ONCE: "0"
   REDIS_DEBUG: "0"
+  TENANT_ID: "agentic-prod"
   
   # LLM Configuration
   LLM_PROVIDER: "openai"
   ENABLE_LEAD_CONTEXT_ENRICHMENT: "1"
+
+  # API Gateway
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  DEBUG: "0"
+  DEV_LOGIN_ENABLED: "0"
+  CORS_ORIGINS: "https://app.example.com"
+  RATE_LIMIT_REQUESTS: "100"
+  RATE_LIMIT_WINDOW_SECONDS: "60"
+
+  # Portal (Next.js)
+  NEXT_PUBLIC_SUPABASE_URL: "https://your-project.supabase.co"
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "REPLACE_ME"
+  NEXT_PUBLIC_API_URL: "https://app.example.com/api"

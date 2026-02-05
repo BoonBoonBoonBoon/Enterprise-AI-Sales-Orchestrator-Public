@@ -1,10 +1,11 @@
 # Agentic System — Three-Tier Architecture
 
 **Disclaimer**
+
 - This repository is a public demonstration of a private product developed by my LLC.
 - It does not reflect the current state, full functionality, or progress of the actual product under active development.
 - All secrets have been removed to protect confidentiality for both myself and clients.
-- Portions of the codebase and infrastructure have been modified, mocked, or simplified for privacy, testing, and demonstration purposes. 
+- Portions of the codebase and infrastructure have been modified, mocked, or simplified for privacy, testing, and demonstration purposes.
 - This project is not open source. It is provided solely as an artistic/illustrative showcase.
 - The code in this repository will not run out-of-the-box. Users are expected to design and implement their own features, configurations, and integrations if they wish to experiment with it.
 
@@ -34,7 +35,7 @@ A production-ready, three-tier agent orchestration system with separated concern
 │                │                                           │
 │ ┌──────────────┤                                           │
 │ │ Outreach Orchestrator ────────────────────────────────┐   │
-│ │ {tenant}:orchestrators:outreach:tasks                 │   │
+│ │ {tenant}:orchestrators:outbound:tasks                 │   │
 │ │ → Personalization → Sequencing → Delivery             │   │
 │ └──────────────┬──────────────────────────────────────┘   │
 │                │                                           │
@@ -71,6 +72,7 @@ A production-ready, three-tier agent orchestration system with separated concern
 ```
 
 **Key Features**
+
 - **Three-tier architecture** with clear separation of concerns (strategic, business logic, execution)
 - **Horizontal scalability** via Redis Streams consumer groups
 - **Provenance tracking** with standardized JSON envelope for agent-to-agent communication
@@ -127,12 +129,14 @@ agentic-system/
 ### Development Setup
 
 1. **Clone and navigate to repository**
+
 ```powershell
 git clone <repository-url>
 cd agentic-system
 ```
 
 2. **Create virtual environment**
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -140,12 +144,14 @@ pip install -r requirements.txt
 ```
 
 3. **Configure environment**
+
 ```powershell
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
 4. **Run tests**
+
 ```powershell
 # Unit tests
 pytest tests/unit/ -v
@@ -160,12 +166,14 @@ pytest -v
 ### Docker Deployment
 
 1. **Build images**
+
 ```powershell
 cd deployment
 docker compose build
 ```
 
 2. **Start services**
+
 ```powershell
 # Start Redis and Postgres
 docker compose --profile local up -d redis postgres
@@ -175,6 +183,7 @@ docker compose up -d
 ```
 
 3. **Scale workers**
+
 ```powershell
 # Scale tier_3 agents for parallel processing
 docker compose up -d --scale persistence_agent=3
@@ -183,10 +192,27 @@ docker compose up -d --scale copywriter_agent=2
 ```
 
 4. **Monitor workers**
+
 ```powershell
 docker compose ps
 docker compose logs -f manager
 ```
+
+### Validate Inbound Reply → Auto-send
+
+The quickest end-to-end validation for reply context + sequencing is:
+
+```powershell
+cd deployment
+docker compose exec -T outreach_orchestrator python scripts/testing/validate_rag_to_copywriter_flow.py --auto-send
+```
+
+This confirms:
+
+- RAG returns reply-ready context
+- Leads builds `reply_packet`
+- Outreach enqueues Copywriter and registers auto-send context
+- Sequencer receives a task and emits a `sent` result
 
 ## Usage Examples
 
@@ -254,34 +280,33 @@ similar = await vector_db.similarity_search(query, top_k=5)
 
 ## Documentation
 
-The best and most up-to-date documentation lives on the published site:
-
-- https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
-
-The Markdown files in this repo are still useful for reference, but may lag behind the site.
-
 ### Core Documentation
+
 - **[QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** - Quick reference guide (START HERE)
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Three-tier architecture design
 - **[MIGRATION.md](docs/MIGRATION.md)** - Migration guide with import path mappings
 
 ### Implementation Guides
+
 - **[REDIS_STREAMS.md](docs/REDIS_STREAMS.md)** - Redis Streams patterns
 - **[API.md](docs/API.md)** - API reference and endpoints
 - **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Deployment guide
 
 ### Project Reports
+
 - **[PROJECT_COMPLETION_REPORT.md](docs/PROJECT_COMPLETION_REPORT.md)** - Complete reorganization report
 - **[SCRIPT_COMPATIBILITY.md](docs/SCRIPT_COMPATIBILITY.md)** - Script validation results
 
 ## Testing
 
 ### Unit Tests
+
 ```powershell
 pytest tests/unit/ -v --cov=tiers --cov=core --cov=services
 ```
 
 ### Integration Tests
+
 ```powershell
 # Requires Redis running
 docker compose --profile local up -d redis
@@ -289,6 +314,7 @@ pytest tests/integration/ -v
 ```
 
 ### Smoke Tests
+
 ```powershell
 # End-to-end system test
 pytest tests/smoke/ -v
@@ -297,6 +323,7 @@ pytest tests/smoke/ -v
 ## Monitoring
 
 ### Health Checks
+
 ```powershell
 # Redis connectivity
 python scripts/monitoring/check_redis_status.py
@@ -309,6 +336,7 @@ docker compose ps
 ```
 
 ### Metrics
+
 - Prometheus metrics exposed on workers
 - Grafana dashboards in `deployment/monitoring/`
 - Stream lag monitoring via Redis
@@ -318,6 +346,7 @@ docker compose ps
 ### Adding a New Agent
 
 1. Create agent directory in appropriate tier:
+
 ```
 tiers/tier_3/my_agent/
 ├── my_agent.py
@@ -328,6 +357,7 @@ tiers/tier_3/my_agent/
 ```
 
 2. Implement agent class:
+
 ```python
 from core.harness import AgentHarness
 
@@ -338,6 +368,7 @@ class MyAgent:
 ```
 
 3. Create consumer for Redis Streams:
+
 ```python
 from services.redis import RedisPubSub
 
@@ -348,6 +379,7 @@ class MyAgentConsumer:
 ```
 
 4. Add to docker-compose.yml:
+
 ```yaml
 my_agent:
   image: agentic/worker:dev
@@ -373,8 +405,8 @@ python -m tiers.tier_3.rag_agent.consumer
 ```bash
 # Required
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-anon-key
-OPENAI_API_KEY=sk-...
+SUPABASE_ANON_KEY=your-anon-key
+OPENAI_API_KEY=your-openai-api-key
 REDIS_URL=rediss://your-redis-cloud-url:port
 
 # Optional
@@ -393,12 +425,14 @@ LINKEDIN_ACCESS_TOKEN=your-token        # Professional data
 The system uses a hierarchical Redis Streams structure for clear separation of concerns:
 
 ### Tier 1: Manager (Strategic)
+
 ```
 {tenant}:manager:tasks      # External requests enter here
 {tenant}:manager:results    # Final responses exit here
 ```
 
 ### Tier 2: Orchestrators (Business Logic) ⭐ NEW HIERARCHICAL STRUCTURE
+
 ```
 {tenant}:orchestrators:leads:tasks
 {tenant}:orchestrators:leads:results
@@ -407,6 +441,7 @@ The system uses a hierarchical Redis Streams structure for clear separation of c
 ```
 
 ### Tier 3: Agents (Execution)
+
 ```
 {tenant}:agents:rag:tasks
 {tenant}:agents:rag:results
@@ -422,7 +457,9 @@ The system uses a hierarchical Redis Streams structure for clear separation of c
 ## Troubleshooting
 
 ### Import Errors
+
 If you see import errors, ensure you're using the new tier paths:
+
 ```python
 # OLD (deprecated)
 from agent.manager.manager_agent import ManagerAgent
@@ -434,6 +471,7 @@ from tiers.tier_1.manager import ManagerAgent
 See [MIGRATION.md](docs/MIGRATION.md) for complete path mappings.
 
 ### Docker Build Issues
+
 ```powershell
 # Clean rebuild
 docker compose down
@@ -442,6 +480,7 @@ docker compose up -d
 ```
 
 ### Redis Connection Issues
+
 ```powershell
 # Check Redis is running
 docker compose ps redis
@@ -453,6 +492,7 @@ python scripts/monitoring/check_redis_status.py
 ## Contributing
 
 This is a demonstration project and not open source. However, you're welcome to:
+
 - Study the architecture
 - Use patterns in your own projects
 - Provide feedback via issues (for educational purposes)
@@ -466,5 +506,3 @@ Proprietary - Demonstration purposes only. Not for production use.
 **Last Updated:** November 8, 2025  
 **Architecture Version:** 3-Tier (v2.0)  
 **Status:** Production Ready ✅
-
-

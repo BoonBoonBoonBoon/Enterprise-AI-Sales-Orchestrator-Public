@@ -1,4 +1,4 @@
-﻿# Redis Service
+# Redis Service
 
 The Redis Service provides connection management and utilities for Redis Streams communication.
 
@@ -131,28 +131,28 @@ key = build_stream_key("agentic-dev", "agents", "rag", "tasks")
 | Variable                | Default                    | Description    |
 | ----------------------- | -------------------------- | -------------- |
 | `REDIS_URL`             | `redis://localhost:6379/0` | Connection URL |
-| `REDIS_PASSWORD`        | â€”                          | Auth password  |
+| `REDIS_PASSWORD`        | —                          | Auth password  |
 | `REDIS_MAX_CONNECTIONS` | `10`                       | Pool size      |
 
 ### URL Format
 
 ```
-redis://<REDACTED_REDIS_URL>
+redis://[password@]host:port/db
 
 # Examples
 redis://localhost:6379/0
-redis://<REDACTED_REDIS_URL>
-redis://<REDACTED_REDIS_URL>  # Docker service name
+redis://:mypassword@redis.example.com:6379/0
+redis://redis:6379/0  # Docker service name
 ```
 
 ## File Structure
 
 ```
 services/redis/
-â”œâ”€â”€ __init__.py
-â”œâ”€â”€ client.py          # Connection management
-â”œâ”€â”€ stream_client.py   # High-level stream ops
-â””â”€â”€ README.md
+├── __init__.py
+├── client.py          # Connection management
+├── stream_client.py   # High-level stream ops
+└── README.md
 ```
 
 ## Health Check
@@ -168,7 +168,7 @@ def check_redis_health(redis) -> bool:
 
 ## Error Handling
 
-```python
+````python
 from redis.exceptions import ConnectionError, TimeoutError
 
 try:
@@ -178,6 +178,25 @@ except ConnectionError:
     # Retry or fail gracefully
 except TimeoutError:
     logger.error("Redis operation timed out")
+
+## Hash Operations (Workflow State)
+
+Some orchestration paths store small state outside streams using Redis hashes (e.g. Outreach auto-send context).
+
+```python
+from services.redis import RedisStreamsClient
+
+r = RedisStreamsClient(url=os.getenv("REDIS_URL"), namespace=os.getenv("REDIS_NAMESPACE"))
+
+# Example: store routing context for a copywriter task
+r.hset("agentic-dev:outreach:auto_send", "copy-<uuid>", "{...json...}")
+ctx = r.hget("agentic-dev:outreach:auto_send", "copy-<uuid>")
+r.hdel("agentic-dev:outreach:auto_send", "copy-<uuid>")
+````
+
+!!! note "Namespace prefixing"
+If you pass already-prefixed keys (for example `agentic-dev:outreach:auto_send`), the client should not double-prefix them.
+
 ```
 
 ## Related
@@ -185,4 +204,4 @@ except TimeoutError:
 - [Redis Streams Concept](../../concepts/redis-streams.md)
 - [ADR-003: Redis Streams](../../architecture/decisions/003-redis-streams-over-queues.md)
 - [Stream Keys Reference](../../reference/api/streams.md)
-
+```

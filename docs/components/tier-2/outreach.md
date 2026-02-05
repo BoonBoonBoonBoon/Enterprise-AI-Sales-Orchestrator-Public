@@ -109,15 +109,24 @@ Drafting a reply:
 2. Extract context from reply_packet
    ↓
 3. Generate reply
-   → CopywriterAgent: draft_reply
-   ↓
-4. Send email
-   → EmailService: send
-   ↓
-5. Store sent message
-   → PersistenceAgent: create message
-   ↓
+  → CopywriterAgent: draft_reply
+  ↓
+4. (Optional) Auto-send via Sequencer
+  → `{tenant}:agents:sequencing:tasks`
+  ↓
+5. Store sent message (if enabled)
+  → PersistenceAgent
+  ↓
 6. Return result to Manager
+
+## Auto-send via Sequencer
+
+When `auto_send=true`, Outreach registers routing context for the copywriter task and then, on copywriter completion, enqueues a sequencing request.
+
+- **Auto-send context (Redis Hash):** `{tenant}:outreach:auto_send` keyed by `copy_task_id`
+- **Sequencing tasks stream:** `{tenant}:agents:sequencing:tasks`
+
+This prevents the common failure mode where sequencing is never triggered due to missing routing context.
 ```
 
 ## DeepAgent Tools
@@ -200,6 +209,7 @@ OutreachOrchestrator can **only** communicate:
 | Input          | `{tenant}:orchestrators:outbound:tasks`   |
 | Output         | `{tenant}:orchestrators:outbound:results` |
 | To Copywriter  | `{tenant}:agents:copywriter:tasks`        |
+| To Sequencer   | `{tenant}:agents:sequencing:tasks`        |
 | To Persistence | `{tenant}:agents:persistence:tasks`       |
 
 ## Email Service Integration

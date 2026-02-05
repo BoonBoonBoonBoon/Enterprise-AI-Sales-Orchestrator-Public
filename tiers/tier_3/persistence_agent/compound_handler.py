@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -22,6 +23,44 @@ logger = logging.getLogger(__name__)
 
 # Allow nested field paths: $ref:step.field.subfield
 REF_PATTERN = re.compile(r"\$ref:([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_.]*)")
+
+# Retry config for transient PostgREST errors (like 42P10 schema cache issues)
+RETRY_MAX_ATTEMPTS = 3
+RETRY_BASE_DELAY_SECONDS = 0.5
+RETRY_TRANSIENT_CODES = {"42P10", "PGRST301", "PGRST302"}  # Schema cache, connection issues
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    """Check if the exception is a transient error that should be retried."""
+    error_str = str(exc)
+    return any(code in error_str for code in RETRY_TRANSIENT_CODES)
+
+
+def _retry_upsert(
+    adapter: Any,
+    table: str,
+    record: Dict[str, Any],
+    on_conflict: Optional[List[str]] = None,
+    max_attempts: int = RETRY_MAX_ATTEMPTS,
+) -> Dict[str, Any]:
+    """Execute upsert with retry logic for transient errors."""
+    last_exc = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return adapter.upsert(table, record, on_conflict=on_conflict)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < max_attempts and _is_transient_error(exc):
+                delay = RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+                logger.warning(
+                    "Transient upsert error on %s (attempt %d/%d), retrying in %.1fs: %s",
+                    table, attempt, max_attempts, delay, exc
+                )
+                time.sleep(delay)
+            else:
+                raise
+    # Should not reach here, but safety net
+    raise last_exc  # type: ignore
 
 
 def _filter_known_columns(table: str, data: Any, known_columns: Optional[List[str]]) -> Any:
@@ -225,7 +264,7 @@ def execute_step(step: TableStep, adapter: SupabaseAdapter, outputs: Dict[str, A
                         payload = filtered_data or {}
                         payload = payload if isinstance(payload, dict) else {}
                         payload = {**payload, "id": m_id}
-                        adapter.upsert(step.table, payload, on_conflict=["id"])
+                        _retry_upsert(adapter, step.table, payload, on_conflict=["id"])
                         updated_ids.append(m_id)
                     records_affected = len(updated_ids)
                     output = {"updated_ids": updated_ids}
@@ -235,12 +274,12 @@ def execute_step(step: TableStep, adapter: SupabaseAdapter, outputs: Dict[str, A
             if isinstance(filtered_data, list):
                 collected = []
                 for item in filtered_data:
-                    res = adapter.upsert(step.table, item, on_conflict=on_conflict)
+                    res = _retry_upsert(adapter, step.table, item, on_conflict=on_conflict)
                     collected.append(_normalize_result(res))
                 output = collected
                 records_affected = len(collected)
             else:
-                res = adapter.upsert(step.table, filtered_data or {}, on_conflict=on_conflict)
+                res = _retry_upsert(adapter, step.table, filtered_data or {}, on_conflict=on_conflict)
                 output = _normalize_result(res)
                 records_affected = 1 if output else 0
 
@@ -443,8 +482,9 @@ def build_inbound_email_compound(
             TableStep(
                 step_name="cleanup_staging",
                 table="staging_leads",
-                operation=StepOperation.DELETE,
+                operation=StepOperation.UPDATE,
                 where={"email": sender_email},
+                data={"archived_at": "NOW()"},
                 on_error="skip",
             )
         )

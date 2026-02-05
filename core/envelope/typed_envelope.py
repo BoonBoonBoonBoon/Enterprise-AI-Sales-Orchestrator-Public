@@ -216,3 +216,56 @@ def from_redis_message(fields: Dict[str, Any]) -> Envelope:
 def to_redis_fields(envelope: Envelope) -> Dict[str, str]:
     """Convert envelope to Redis XADD fields dict"""
     return {"data": envelope.to_json()}
+
+
+def normalize_envelope(data: Any, *, default_source: str = "unknown") -> Envelope:
+    """Normalize legacy or typed envelopes into the canonical typed Envelope.
+
+    Accepts:
+    - Typed Envelope instances
+    - Dicts matching typed Envelope schema
+    - Legacy dicts with {metadata, records, status, error}
+    """
+    if isinstance(data, Envelope):
+        return data
+
+    if isinstance(data, dict):
+        # Typed envelope dict
+        try:
+            return Envelope.model_validate(data)
+        except Exception:
+            pass
+
+        # Legacy envelope dict
+        if "metadata" in data and "records" in data:
+            legacy_meta = data.get("metadata") or {}
+            legacy_status = str(data.get("status") or "").lower()
+            error_msg = data.get("error")
+
+            status = Status.SUCCESS
+            if legacy_status in ("error", "failed"):
+                status = Status.ERROR
+            elif legacy_status in ("retry", "dlq"):
+                status = Status.RETRY if legacy_status == "retry" else Status.DLQ
+
+            return Envelope(
+                metadata=Metadata(
+                    task_id=str(legacy_meta.get("task_id") or data.get("task_id") or uuid.uuid4()),
+                    source=str(legacy_meta.get("source") or default_source),
+                    destination=legacy_meta.get("target"),
+                    correlation_id=legacy_meta.get("correlation_id"),
+                    req_id=legacy_meta.get("req_id") or legacy_meta.get("request_id"),
+                    tenant_id=legacy_meta.get("tenant_id"),
+                    campaign_id=legacy_meta.get("campaign_id"),
+                    tags={"legacy_envelope": "true"},
+                    debug={"legacy_metadata": legacy_meta},
+                ),
+                payload={
+                    "records": data.get("records", []),
+                    "legacy_status": data.get("status"),
+                },
+                status=status,
+                error=error_msg if status == Status.ERROR else None,
+            )
+
+    raise ValueError("Unsupported envelope format")

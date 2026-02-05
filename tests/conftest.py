@@ -1,3 +1,17 @@
+import sys
+from pathlib import Path
+
+
+def pytest_configure():
+    """Ensure the repo root is importable for all tests.
+
+    Many modules use absolute imports (e.g. `from core...`, `from services...`).
+    Adding the project root once here avoids per-test sys.path boilerplate.
+    """
+
+    project_root = Path(__file__).resolve().parents[1]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 import os
 import json
 import contextvars
@@ -27,6 +41,83 @@ def _load_env_file(filename: str = '.env'):
         pass
 
 _load_env_file()
+
+# --- Redis test connection pooling ----------------------------------------
+
+@pytest.fixture(autouse=True, scope="session")
+def _redis_shared_pool():
+    """Share Redis connection pools across tests to avoid max client exhaustion."""
+    try:
+        import redis  # type: ignore
+    except Exception:
+        yield
+        return
+
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    max_connections = int(os.getenv("REDIS_TEST_MAX_CONNECTIONS", "200"))
+    pools: dict[tuple[str, bool], "redis.ConnectionPool"] = {}
+
+    original_from_url = redis.from_url
+    original_class_from_url = redis.Redis.from_url
+
+    def _pool_for(url: str, decode_responses: bool):
+        key = (url, bool(decode_responses))
+        if key not in pools:
+            pools[key] = redis.ConnectionPool.from_url(
+                url,
+                decode_responses=bool(decode_responses),
+                max_connections=max_connections,
+            )
+        return pools[key]
+
+    def _from_url(url: str, *args, **kwargs):
+        # Respect explicit connection_pool if provided
+        if kwargs.get("connection_pool") is not None:
+            return original_from_url(url, *args, **kwargs)
+        decode_responses = kwargs.get("decode_responses", False)
+        pool = _pool_for(url or redis_url, decode_responses)
+        return redis.Redis(connection_pool=pool)
+
+    def _class_from_url(cls, url: str, *args, **kwargs):
+        return _from_url(url, *args, **kwargs)
+
+    redis.from_url = _from_url  # type: ignore
+    redis.Redis.from_url = classmethod(_class_from_url)  # type: ignore
+
+    try:
+        import redis.asyncio as redis_async  # type: ignore
+
+        original_async_from_url = redis_async.from_url
+
+        def _async_from_url(url: str, *args, **kwargs):
+            if kwargs.get("connection_pool") is not None:
+                return original_async_from_url(url, *args, **kwargs)
+            decode_responses = kwargs.get("decode_responses", False)
+            pool = _pool_for(url or redis_url, decode_responses)
+            return redis_async.Redis(connection_pool=pool)
+
+        redis_async.from_url = _async_from_url  # type: ignore
+    except Exception:
+        original_async_from_url = None
+
+    try:
+        yield
+    finally:
+        # Restore originals
+        redis.from_url = original_from_url  # type: ignore
+        redis.Redis.from_url = original_class_from_url  # type: ignore
+        if original_async_from_url is not None:
+            try:
+                import redis.asyncio as redis_async  # type: ignore
+                redis_async.from_url = original_async_from_url  # type: ignore
+            except Exception:
+                pass
+
+        for pool in pools.values():
+            try:
+                pool.disconnect()
+            except Exception:
+                pass
 
 # Provide a simple marker skip for live network calls if user explicitly disables them.
 LIVE_NETWORK_DISABLED = os.environ.get('DISABLE_LIVE_INTEGRATION') in ('1', 'true', 'TRUE')

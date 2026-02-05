@@ -64,6 +64,7 @@ from .typed_envelope import (
     error,
     from_redis_message,
     to_redis_fields,
+    normalize_envelope,
 )
 
 # Also expose legacy envelope for compatibility
@@ -81,6 +82,7 @@ __all__ = [
     "error",
     "from_redis_message",
     "to_redis_fields",
+    "normalize_envelope",
     # Legacy envelope (compatibility)
     "legacy_envelope",
 ]

@@ -1,4 +1,4 @@
-﻿# Docker Deployment
+# Docker Deployment
 
 This guide covers deploying the Agentic System with Docker Compose.
 
@@ -24,16 +24,16 @@ docker-compose logs -f
 ## Architecture
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                    Docker Compose                           â”‚
-â”‚                                                             â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
-â”‚  â”‚  Redis   â”‚  â”‚ Supabase â”‚  â”‚  Agents  â”‚  â”‚ Monitor  â”‚   â”‚
-â”‚  â”‚          â”‚  â”‚ (Postgresâ”‚  â”‚  (x5)    â”‚  â”‚ Stack    â”‚   â”‚
-â”‚  â”‚  :6379   â”‚  â”‚  + API)  â”‚  â”‚          â”‚  â”‚          â”‚   â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
-â”‚                                                             â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────────┐
+│                    Docker Compose                           │
+│                                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │  Redis   │  │ Supabase │  │  Agents  │  │ Monitor  │   │
+│  │          │  │ (Postgres│  │  (x5)    │  │ Stack    │   │
+│  │  :6379   │  │  + API)  │  │          │  │          │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Configuration
@@ -64,7 +64,7 @@ services:
     command: python -m tiers.tier_3.rag_agent.consumer
     environment:
       - TENANT_ID=agentic-dev
-      - REDIS_URL=redis://<REDACTED_REDIS_URL>
+      - REDIS_URL=redis://redis:6379/0
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
@@ -79,7 +79,7 @@ services:
     command: python -m tiers.tier_3.persistence_agent.consumer
     environment:
       - TENANT_ID=agentic-dev
-      - REDIS_URL=redis://<REDACTED_REDIS_URL>
+      - REDIS_URL=redis://redis:6379/0
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
@@ -94,7 +94,7 @@ services:
     command: python -m tiers.tier_3.copywriter_agent.consumer
     environment:
       - TENANT_ID=agentic-dev
-      - REDIS_URL=redis://<REDACTED_REDIS_URL>
+      - REDIS_URL=redis://redis:6379/0
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       redis:
@@ -107,7 +107,7 @@ services:
     command: python -m tiers.tier_2.leads_orchestrator.consumer
     environment:
       - TENANT_ID=agentic-dev
-      - REDIS_URL=redis://<REDACTED_REDIS_URL>
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - rag-agent
       - persistence-agent
@@ -119,7 +119,7 @@ services:
     command: python -m tiers.tier_1.manager.consumer
     environment:
       - TENANT_ID=agentic-dev
-      - REDIS_URL=redis://<REDACTED_REDIS_URL>
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - leads-orchestrator
 
@@ -157,9 +157,9 @@ Create `.env` file:
 ```bash
 # .env
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=eyJ...
-SUPABASE_JWT_SECRET=your-secret
-OPENAI_API_KEY=sk-...
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_JWT_SECRET=your-jwt-secret
+OPENAI_API_KEY=your-openai-api-key
 TENANT_ID=agentic-dev
 ```
 
@@ -258,8 +258,8 @@ docker-compose exec rag-agent python -c "print('ok')"
 docker-compose logs rag-agent
 
 # Common issues:
-# - Missing env vars â†’ check .env file
-# - Redis not ready â†’ check depends_on
+# - Missing env vars → check .env file
+# - Redis not ready → check depends_on
 ```
 
 ### Out of Memory
@@ -276,4 +276,3 @@ docker stats
 - [Kubernetes Deployment](kubernetes.md)
 - [Environment Variables](../../reference/config/env-vars.md)
 - [Monitoring](../ops/monitoring.md)
-

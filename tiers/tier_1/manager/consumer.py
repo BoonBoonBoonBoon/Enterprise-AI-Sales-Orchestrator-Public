@@ -27,6 +27,8 @@ try:
 except Exception:
     pass
 
+from config.settings import validate_keys
+
 try:
     from services.redis import RedisPubSub
 except ImportError:
@@ -34,6 +36,8 @@ except ImportError:
     from agent.tools.redis.client import RedisPubSub
 from .manager_agent_harness import ManagerAgentHarness
 from core.envelope import from_redis_message, to_redis_fields, result as create_result_envelope, error as create_error_envelope
+from core.dlq import DeadLetterQueue
+from core.observability import start_redis_stream_metrics
 
 logging.basicConfig(
     level=logging.INFO,
@@ -78,6 +82,7 @@ class ManagerConsumer:
         # Stream names
         self.task_stream = f"{tenant_id}:manager:tasks"
         self.result_stream = f"{tenant_id}:manager:results"
+        self.dlq = DeadLetterQueue(redis_client, self.task_stream)
         
         # Create harness
         self.harness = ManagerAgentHarness(
@@ -95,6 +100,49 @@ class ManagerConsumer:
             f"ManagerConsumer initialized: tenant={tenant_id}, "
             f"group={consumer_group}, name={self.consumer_name}"
         )
+
+    def _get_delivery_count(self, message_id: str) -> int:
+        try:
+            pending = self.redis.xpending_range(
+                self.task_stream,
+                self.consumer_group,
+                min=message_id,
+                max=message_id,
+                count=1,
+            )
+            if pending:
+                entry = pending[0]
+                if isinstance(entry, dict):
+                    return int(entry.get("times_delivered", 1))
+                if isinstance(entry, (list, tuple)) and len(entry) >= 4:
+                    return int(entry[3])
+        except Exception:
+            pass
+        return 1
+
+    def _handle_failure(self, message_id: str, message_data: Dict[str, Any], error: Exception, envelope=None) -> None:
+        failure_count = self._get_delivery_count(message_id)
+        if self.dlq.should_dlq(failure_count):
+            self.dlq.send_to_dlq(
+                message_data,
+                message_id,
+                error=error,
+                failure_count=failure_count,
+                consumer_name=self.consumer_name,
+                tenant_id=self.tenant_id,
+            )
+            if envelope is not None:
+                try:
+                    error_envelope = create_error_envelope(
+                        original=envelope,
+                        error_msg=str(error),
+                        source="manager_agent",
+                        code="MANAGER_ERROR",
+                    )
+                    self.redis.xadd(self.result_stream, to_redis_fields(error_envelope))
+                except Exception as publish_exc:  # pragma: no cover
+                    logger.error(f"Failed to publish error envelope: {publish_exc}", exc_info=True)
+            self.redis.xack(self.task_stream, self.consumer_group, message_id)
     
     def _ensure_consumer_group(self):
         """Create consumer group if it doesn't exist"""
@@ -161,8 +209,7 @@ class ManagerConsumer:
             
         except Exception as e:
             logger.error(f"Error processing Manager task: {e}", exc_info=True)
-            
-            # Don't ack - let it retry or go to pending
+            self._handle_failure(message_id, message_data, e, envelope=locals().get("envelope"))
             raise
     
     async def run(self, block_ms: int = 5000, count: int = 10):
@@ -187,7 +234,16 @@ class ManagerConsumer:
                 )
                 
                 if not messages:
-                    continue
+                    pending = self.redis.xreadgroup(
+                        groupname=self.consumer_group,
+                        consumername=self.consumer_name,
+                        streams={self.task_stream: "0"},
+                        count=count,
+                        block=1,
+                    )
+                    if not pending:
+                        continue
+                    messages = pending
                 
                 # Process messages
                 for stream_name, stream_messages in messages:
@@ -208,6 +264,7 @@ class ManagerConsumer:
 
 async def main():
     """Main entry point"""
+        validate_keys(raise_on_missing=True)
     # Get configuration from environment
     tenant_id = os.getenv("TENANT_ID", "default")
     environment = os.getenv("ENVIRONMENT", "development")
@@ -219,6 +276,13 @@ async def main():
 
     redis_pubsub = RedisPubSub(url=redis_url)
     redis_client = redis_pubsub.client
+
+    start_redis_stream_metrics(
+        redis_url=redis_url,
+        tenant_id=tenant_id,
+        component="manager",
+        streams=[(f"{tenant_id}:manager:tasks", "manager-workers")],
+    )
     
     # Create and run consumer
     consumer = ManagerConsumer(

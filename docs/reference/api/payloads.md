@@ -227,10 +227,25 @@ Generate reply to inbound message.
 {
   "action": "draft_reply",
   "reply_packet": {
-    "inbound_message": "Thanks for reaching out. Can you tell me more?",
-    "lead_context": { ... },
-    "conversation_history": [...],
-    "reply_type": "interested"
+    "lead_resolution": { "status": "found", "lead_id": "uuid" },
+    "facts": {
+      "first_name": "Jane",
+      "company": "Acme",
+      "email": "jane@acme.com"
+    },
+    "conversation": {
+      "recent_messages": [{ "role": "lead", "content": "..." }]
+    },
+    "inbound_email_event": {
+      "from": "jane@acme.com",
+      "to": "inbox@agency.com",
+      "subject": "Re: ...",
+      "body": "...",
+      "thread_id": "...",
+      "message_id": "...",
+      "received_at": "2026-01-18T10:00:00Z"
+    },
+    "query_trace": { "operation": "build_reply_context" }
   }
 }
 ```
@@ -262,8 +277,10 @@ Handle inbound email/reply.
   "action": "process_inbound",
   "email": {
     "from": "john@example.com",
+    "to": "inbox@agency.com",
     "subject": "Re: Your proposal",
     "body": "I'm interested in learning more...",
+    "message_id": "...",
     "received_at": "2025-01-15T10:00:00Z"
   },
   "lead_id": "uuid or null"
@@ -278,10 +295,18 @@ Handle inbound email/reply.
   "lead_id": "uuid",
   "lead_source": "leads",
   "reply_packet": {
-    "inbound_message": "...",
-    "lead_context": { ... },
-    "conversation_history": [...],
-    "reply_type": "interested"
+    "lead_resolution": { "status": "found", "lead_id": "uuid" },
+    "facts": { "email": "john@example.com" },
+    "conversation": { "recent_messages": [] },
+    "inbound_email_event": {
+      "from": "john@example.com",
+      "to": "inbox@agency.com",
+      "subject": "Re: ...",
+      "body": "...",
+      "thread_id": "...",
+      "message_id": "...",
+      "received_at": "2026-01-18T10:00:00Z"
+    }
   },
   "query_trace": { ... }
 }
@@ -328,10 +353,12 @@ Process reply packet from Leads.
 {
   "action": "handle_reply",
   "reply_packet": {
-    "inbound_message": "...",
-    "lead_context": { ... },
-    "conversation_history": [...],
-    "reply_type": "interested"
+    "lead_resolution": { "status": "found", "lead_id": "uuid" },
+    "facts": { "first_name": "John", "company": "Acme" },
+    "conversation": {
+      "recent_messages": [{ "role": "lead", "content": "..." }]
+    },
+    "inbound_email_event": { "thread_id": "..." }
   }
 }
 ```

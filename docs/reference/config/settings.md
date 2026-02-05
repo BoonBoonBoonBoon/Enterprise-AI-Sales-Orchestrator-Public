@@ -1,4 +1,4 @@
-﻿# Settings Reference
+# Settings Reference
 
 This reference documents the `config/settings.py` module and application configuration.
 
@@ -7,13 +7,13 @@ This reference documents the `config/settings.py` module and application configu
 Settings are loaded from environment variables with fallbacks to defaults.
 
 ```python
-from config.settings import settings
+import config.settings as settings
 
-print(settings.tenant_id)
-print(settings.redis_url)
+print(settings.SUPABASE_URL)
+print(settings.INBOX_PROVIDER)
 ```
 
-## Settings Class
+## Implementation
 
 ### Location
 
@@ -23,66 +23,29 @@ config/settings.py
 
 ### Implementation
 
-```python
-from pydantic_settings import BaseSettings
+`config/settings.py` currently exposes module-level configuration values loaded via `os.getenv()`.
 
-class Settings(BaseSettings):
-    # Core
-    tenant_id: str = "agentic-dev"
-    environment: str = "development"
-    log_level: str = "INFO"
+Key exports include:
 
-    # Redis
-    redis_url: str = "redis://localhost:6379/0"
-    redis_password: str | None = None
+- `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_ANON_KEY`
+- `OPENAI_API_KEY`
+- Inbox/email ingestion: `INBOX_PROVIDER`, `INBOX_POLL_INTERVAL_S`, `GMAIL_READ_CREDENTIALS_PATH`, `IMAP_HOST`, etc.
 
-    # Supabase
-    supabase_url: str
-    supabase_anon_key: str
-    supabase_jwt_secret: str
-
-    # LLM
-    openai_api_key: str | None = None
-    anthropic_api_key: str | None = None
-    llm_model: str = "gpt-4o"
-    llm_temperature: float = 0.1
-
-    # Email
-    gmail_credentials_path: str = "credentials.json"
-    gmail_token_path: str = "token.json"
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
-settings = Settings()
-```
+There is also a `validate_keys()` helper to check required credentials.
 
 ## Configuration Categories
 
 ### Core Settings
 
-| Setting       | Env Var       | Default       | Description                            |
-| ------------- | ------------- | ------------- | -------------------------------------- |
-| `tenant_id`   | `TENANT_ID`   | `agentic-dev` | Multi-tenant identifier                |
-| `environment` | `ENVIRONMENT` | `development` | `development`, `staging`, `production` |
-| `log_level`   | `LOG_LEVEL`   | `INFO`        | `DEBUG`, `INFO`, `WARNING`, `ERROR`    |
+Core settings are primarily configured via `.env` and consumed where needed.
 
 ### Redis Settings
 
-| Setting          | Env Var          | Default                    | Description          |
-| ---------------- | ---------------- | -------------------------- | -------------------- |
-| `redis_url`      | `REDIS_URL`      | `redis://localhost:6379/0` | Redis connection URL |
-| `redis_password` | `REDIS_PASSWORD` | `None`                     | Password if required |
-| `redis_ssl`      | `REDIS_SSL`      | `false`                    | Enable TLS           |
+See [env-vars.md](env-vars.md) for the authoritative list.
 
 ### Supabase Settings
 
-| Setting               | Env Var               | Default      | Description        |
-| --------------------- | --------------------- | ------------ | ------------------ |
-| `supabase_url`        | `SUPABASE_URL`        | **required** | Project URL        |
-| `supabase_anon_key`   | `SUPABASE_ANON_KEY`   | **required** | Anonymous API key  |
-| `supabase_jwt_secret` | `SUPABASE_JWT_SECRET` | **required** | JWT signing secret |
+`SUPABASE_URL` and keys are required for persistence/RAG flows.
 
 ### LLM Settings
 
@@ -94,13 +57,21 @@ settings = Settings()
 | `llm_temperature`   | `LLM_TEMPERATURE`   | `0.1`    | Model temperature |
 | `llm_max_tokens`    | `LLM_MAX_TOKENS`    | `4096`   | Max output tokens |
 
-### Email Settings
+### Email + Inbox Settings
 
-| Setting                  | Env Var                  | Default            | Description       |
-| ------------------------ | ------------------------ | ------------------ | ----------------- |
-| `gmail_credentials_path` | `GMAIL_CREDENTIALS_PATH` | `credentials.json` | OAuth credentials |
-| `gmail_token_path`       | `GMAIL_TOKEN_PATH`       | `token.json`       | Refresh token     |
-| `email_batch_size`       | `EMAIL_BATCH_SIZE`       | `50`               | Emails per batch  |
+Inbound ingestion settings (Tier-0 poller/webhook):
+
+- `INBOX_PROVIDER` (`gmail|imap`)
+- `INBOX_POLL_INTERVAL_S`
+- `INBOX_DEDUP_TTL_SECONDS`
+- `GMAIL_READ_CREDENTIALS_PATH`, `GMAIL_TOKEN_PATH`, `GMAIL_INBOX_USER`
+- `IMAP_HOST`, `IMAP_USERNAME`, `IMAP_PASSWORD`, `IMAP_MAILBOX`
+- `INBOX_WEBHOOK_SECRET`, `INBOX_WEBHOOK_HOST`, `INBOX_WEBHOOK_PORT`
+
+Outbound sending (SMTP):
+
+- `GMAIL_SENDER_EMAIL`
+- `GMAIL_APP_PASSWORD`
 
 ### Agent Settings
 
@@ -185,7 +156,7 @@ LLM_MODEL=gpt-4o-mini  # Cheaper for testing
 # .env.staging
 ENVIRONMENT=staging
 LOG_LEVEL=INFO
-REDIS_URL=redis://<REDACTED_REDIS_URL>
+REDIS_URL=redis://redis-staging:6379/0
 LLM_MODEL=gpt-4o
 ```
 
@@ -195,7 +166,7 @@ LLM_MODEL=gpt-4o
 # .env.production
 ENVIRONMENT=production
 LOG_LEVEL=WARNING
-REDIS_URL=redis://<REDACTED_REDIS_URL>
+REDIS_URL=redis://redis-prod:6379/0
 REDIS_SSL=true
 LLM_MODEL=gpt-4o
 ```
@@ -309,4 +280,3 @@ ROUTING = {
 - [Environment Variables](env-vars.md)
 - [Harness Configuration](harness.md)
 - [Secrets Management](../../guides/deploy/secrets.md)
-

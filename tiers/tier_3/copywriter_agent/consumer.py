@@ -17,6 +17,9 @@ from datetime import datetime
 from .copywriter import CopywriterAgent
 from .copywriter_agent_harness import CopywriterAgentHarness
 from core.envelope import Envelope, from_redis_message, task as create_task_envelope, result as create_result_envelope, error as create_error_envelope, to_redis_fields
+from core.dlq import DeadLetterMessage, DLQ_SUFFIX, DLQ_MAX_RETRIES, DLQ_ENABLED
+from core.observability import start_metrics_server, start_redis_stream_metrics
+from config.settings import validate_keys
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,8 @@ class CopywriterAgentConsumer:
         # Hierarchical stream naming
         self.task_stream = f"{tenant_id}:agents:copywriter:tasks"
         self.result_stream = f"{tenant_id}:agents:copywriter:results"
+        self.dlq_stream = f"{self.task_stream}{DLQ_SUFFIX}"
+        self.max_retries = DLQ_MAX_RETRIES
         
         # Initialize agent and harness
         agent = CopywriterAgent(llm_config=llm_config)
@@ -73,6 +78,59 @@ class CopywriterAgentConsumer:
                 "consumer_name": self.consumer_name
             }
         )
+
+    async def _get_delivery_count(self, message_id: str) -> int:
+        try:
+            pending = await self.redis_client.xpending_range(
+                self.task_stream,
+                self.consumer_group,
+                min=message_id,
+                max=message_id,
+                count=1,
+            )
+            if pending:
+                entry = pending[0]
+                if isinstance(entry, dict):
+                    return int(entry.get("times_delivered", 1))
+                if isinstance(entry, (list, tuple)) and len(entry) >= 4:
+                    return int(entry[3])
+        except Exception:
+            pass
+        return 1
+
+    async def _handle_failure(self, message_id: str, message_data: Dict[str, bytes], error: Exception, envelope=None) -> None:
+        if not DLQ_ENABLED:
+            return
+        failure_count = await self._get_delivery_count(message_id)
+        if failure_count < self.max_retries:
+            return
+
+        dlq_message = DeadLetterMessage(
+            original_message=message_data,
+            original_stream=self.task_stream,
+            original_message_id=message_id,
+            failure_reason="max_retries_exceeded",
+            failure_count=failure_count,
+            last_error=str(error),
+            error_type=type(error).__name__,
+            consumer_name=self.consumer_name,
+            tenant_id=self.tenant_id,
+        )
+        await self.redis_client.xadd(self.dlq_stream, dlq_message.to_dict())
+
+        if envelope is not None:
+            try:
+                error_envelope = create_error_envelope(
+                    original=envelope,
+                    error_msg=str(error),
+                    source="agents:copywriter",
+                    code="COPYWRITER_ERROR",
+                )
+                await self.redis_client.xadd(self.result_stream, to_redis_fields(error_envelope))
+            except Exception:
+                pass
+
+        await self.redis_client.xack(self.task_stream, self.consumer_group, message_id)
     
     async def ensure_consumer_group(self):
         """Create consumer group if it doesn't exist."""
@@ -230,6 +288,7 @@ class CopywriterAgentConsumer:
                 extra={"message_id": message_id},
                 exc_info=True
             )
+            await self._handle_failure(message_id, message_data, e, envelope=locals().get("envelope"))
     
     async def run(self, block_ms: int = 5000):
         """
@@ -262,7 +321,16 @@ class CopywriterAgentConsumer:
                 )
                 
                 if not messages:
-                    continue
+                    pending = await self.redis_client.xreadgroup(
+                        groupname=self.consumer_group,
+                        consumername=self.consumer_name,
+                        streams={self.task_stream: "0"},
+                        count=1,
+                        block=1,
+                    )
+                    if not pending:
+                        continue
+                    messages = pending
                 
                 # Process messages
                 for stream_name, stream_messages in messages:
@@ -285,15 +353,28 @@ async def main():
         load_dotenv()
     except Exception:
         pass
+
+    validate_keys(raise_on_missing=True)
     
     # Configuration
     tenant_id = os.getenv("TENANT_ID", "agentic-dev")
+    
+    # Start metrics server for this component
+    start_metrics_server(component="copywriter_agent")
+    
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         raise SystemExit("REDIS_URL is not set (required for copywriter_agent)")
 
     redis_client = redis.from_url(redis_url, decode_responses=False)
     connection_desc = redis_url.split("@")[-1]
+
+    start_redis_stream_metrics(
+        redis_url=redis_url,
+        tenant_id=tenant_id,
+        component="copywriter_agent",
+        streams=[(f"{tenant_id}:agents:copywriter:tasks", "copywriter-workers")],
+    )
     
     try:
         # Test connection

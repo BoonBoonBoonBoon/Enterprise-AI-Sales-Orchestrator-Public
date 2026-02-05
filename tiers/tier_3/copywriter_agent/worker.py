@@ -29,6 +29,12 @@ except Exception:
 from services.redis import RedisStreamsClient, config as rconf
 from core.envelope import from_redis_message, task, result, error, to_redis_fields, Status
 from core.utils.rate_limiter import init_rate_limiter, get_rate_limiter
+from core.security.prompt_hardening import (
+    get_hardened_copywriter_prompt,
+    sanitize_user_input,
+    validate_llm_output_safe,
+    scrub_ai_references,
+)
 
 # Optional persistence for lead context enrichment
 from services.persistence.service import build_supabase_service, ReadOnlyPersistenceFacade
@@ -200,8 +206,22 @@ class CopyWorker:
         required_elements = instructions.get("required_elements", instructions.get("constraints", []))
         template_id = instructions.get("template_id", instructions.get("template", f"step{step}"))
         
-        # Build comprehensive prompt
-        prompt = f"""You are a professional email copywriter specializing in B2B outreach.
+        # Build comprehensive prompt with security hardening
+        # Sanitize all user inputs
+        lead_name = sanitize_user_input(lead_name)
+        company = sanitize_user_input(company)
+        lead_title = sanitize_user_input(lead_title) if lead_title else ""
+        lead_email = sanitize_user_input(lead_email) if lead_email else ""
+        lead_industry = sanitize_user_input(lead_industry) if lead_industry else ""
+        lead_location = sanitize_user_input(lead_location) if lead_location else ""
+        campaign_name = sanitize_user_input(campaign_name) if campaign_name else ""
+        product_name = sanitize_user_input(product_name) if product_name else ""
+        value_proposition = sanitize_user_input(value_proposition) if value_proposition else ""
+        previous_subject = sanitize_user_input(previous_subject) if previous_subject else ""
+        previous_body_summary = sanitize_user_input(previous_body_summary) if previous_body_summary else ""
+        cta = sanitize_user_input(cta) if cta else "schedule a call"
+        
+        prompt = f"""Write a compelling B2B follow-up email.
 
 LEAD DETAILS:
 - Name: {lead_name}
@@ -216,14 +236,14 @@ LEAD DETAILS:
         if lead_location:
             prompt += f"\n- Location: {lead_location}"
         
-        # Add recent interactions context if available
+        # Add recent interactions context if available (sanitized)
         recent_interactions = lead_data.get("recent_interactions", [])
         if recent_interactions:
             prompt += f"\n\nRECENT INTERACTIONS ({len(recent_interactions)} total):"
             for i, interaction in enumerate(recent_interactions[:3], 1):
-                interaction_type = interaction.get("type", "email")
-                interaction_date = interaction.get("created_at", "unknown")
-                interaction_summary = interaction.get("summary", "No summary available")
+                interaction_type = sanitize_user_input(str(interaction.get("type", "email")))
+                interaction_date = sanitize_user_input(str(interaction.get("created_at", "unknown")))
+                interaction_summary = sanitize_user_input(str(interaction.get("summary", "No summary available")))
                 prompt += f"\n{i}. {interaction_type.upper()} on {interaction_date}: {interaction_summary}"
         
         prompt += f"""
@@ -264,16 +284,22 @@ Write a compelling follow-up email for {lead_name} at {company}. The email shoul
 3. Include a clear, soft call to action: {cta}
 4. Match the {tone} tone
 5. Be concise and respect the recipient's time ({max_length} words max)
-6. Feel personal and human, not templated
+6. Feel personal and human, NOT templated or robotic
+7. NEVER use placeholder brackets like [Name] or [Company]
 
-Return ONLY the email content in this exact format:
-Subject: [subject line]
+Return ONLY the email content in this format:
+Subject: <subject line>
 
-[email body]
+<email body>
 
-Do not include any explanations, notes, or additional commentary."""
+No explanations or additional commentary."""
         
-        return prompt
+        # Apply security hardening for human identity
+        return get_hardened_copywriter_prompt(
+            base_prompt=prompt,
+            include_human_identity=True,
+            include_anti_injection=True
+        )
 
     def _call_openai(self, prompt: str, instructions: Dict[str, Any]) -> Dict[str, Any]:
         """Call OpenAI API to generate email content."""
@@ -284,7 +310,7 @@ Do not include any explanations, notes, or additional commentary."""
         response = self.llm_client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "You are a professional B2B email copywriter."},
+                {"role": "system", "content": "You write professional B2B emails. Write naturally like a real person. Never mention AI, bots, or language models. Never use placeholder brackets."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=max_tokens,

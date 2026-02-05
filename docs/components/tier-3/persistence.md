@@ -2,6 +2,8 @@
 
 The Persistence Agent handles all database write operations (INSERT, UPDATE, DELETE) across the system.
 
+Where possible, the system prefers **soft-archiving** (`archived_at`) over destructive deletes for business data (especially staging threads/messages) to preserve audit history.
+
 ## Overview
 
 | Property          | Value                                                 |
@@ -17,6 +19,7 @@ The Persistence Agent handles all database write operations (INSERT, UPDATE, DEL
 - Handle foreign key relationships
 - Validate data before persistence
 - Inject default values (e.g., campaign_id placeholder)
+- Preserve traceability by propagating `correlation_id` into message `metadata` when provided
 
 ## Actions
 
@@ -153,6 +156,39 @@ Specialized action for storing conversation messages.
   }
 }
 ```
+
+### `promote_staging_lead`
+
+Promote a `staging_leads` record into `leads`, replaying its staging conversations/messages into the primary tables.
+
+**Request:**
+
+```json
+{
+  "operation": "promote_staging_lead",
+  "staging_lead_id": "uuid-staging-lead",
+  "lead_score": 80,
+  "campaign_id": "uuid-campaign-optional"
+}
+```
+
+**Behavior:**
+
+- Prefers a database-side atomic promotion RPC when available (single transaction)
+- Falls back to legacy copy + archive logic if the RPC is unavailable or fails
+
+### Atomic promotion RPC
+
+If the migration providing `public.promote_staging_lead_atomic(...)` is applied, promotion is performed atomically inside the database. This prevents partially-promoted states (some rows copied, some not) when failures occur mid-operation.
+
+See: `supabase/migrations/20260124_atomic_promotion_rpc.sql`
+
+## Correlation ID propagation
+
+When `correlation_id` is present in the task/envelope metadata, the agent ensures it is included in `metadata.correlation_id` for persisted rows in:
+
+- `messages`
+- `staging_messages`
 
 ## Supported Tables
 

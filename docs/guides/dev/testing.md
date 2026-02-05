@@ -209,6 +209,14 @@ def test_full_rag_flow(redis, adapter):
     assert result["status"] == "success"
 ```
 
+## Qualification & Promotion E2E
+
+To validate the staging → qualification → promotion pipeline end-to-end:
+
+```powershell
+& ".venv/Scripts/python.exe" scripts/testing/test_qualify_lead_promotion_e2e.py
+```
+
 ## Fixtures
 
 ### conftest.py

@@ -82,7 +82,12 @@ def mode_ingest(args):
 
     class NoOpOrch(BaseOrchestrator):
         def run(self, request):
-            return {'metadata': {'source': 'noop'}, 'records': []}
+            from core.envelope import Envelope, Metadata, Status
+            return Envelope(
+                metadata=Metadata(task_id="noop", source="noop", correlation_id="noop"),
+                payload={"records": []},
+                status=Status.SUCCESS,
+            )
 
     cm = CampaignManager()
     cm.register_flow('lead_sync', NoOpOrch())

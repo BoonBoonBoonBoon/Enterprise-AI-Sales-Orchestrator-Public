@@ -1,4 +1,4 @@
-﻿```markdown
+```markdown
 # Outbound Orchestrator + Tier-3 Agents: Redis + Docker Setup Plan
 
 Date: 2025-12-12
@@ -6,9 +6,9 @@ Date: 2025-12-12
 Goal: Run a complete outbound flow in Docker using Redis Streams:
 - Tier 2 orchestrator listens on `{tenant}:orchestrators:outbound:tasks` and publishes to `{tenant}:orchestrators:outbound:results`.
 - Tier 3 agents consume from the already-existing agent streams:
-  - Booking (scheduler): `{tenant}:agents:booking:tasks` â†’ `{tenant}:agents:booking:results`
-  - Copywriter: `{tenant}:agents:copywriter:tasks` â†’ `{tenant}:agents:copywriter:results`
-  - Sequencing (channel sequencer): `{tenant}:agents:sequencing:tasks` â†’ `{tenant}:agents:sequencing:results`
+  - Booking (scheduler): `{tenant}:agents:booking:tasks` → `{tenant}:agents:booking:results`
+  - Copywriter: `{tenant}:agents:copywriter:tasks` → `{tenant}:agents:copywriter:results`
+  - Sequencing (channel sequencer): `{tenant}:agents:sequencing:tasks` → `{tenant}:agents:sequencing:results`
 
 ## Model selection (best outcomes)
 
@@ -20,8 +20,8 @@ Use different models for different phases.
 - **Claude Opus 4.5**: strong for deep reasoning + long-form synthesis (design reviews, edge-case analysis), but usually slower/costlier.
 
 Rule of thumb:
-- Design/coordination steps â†’ GPT-5.2 (Preview) (or Opus 4.5 for deeper review).
-- Pure implementation steps â†’ Codex Max (or Sonnet 4.5 if you want a fast generalist).
+- Design/coordination steps → GPT-5.2 (Preview) (or Opus 4.5 for deeper review).
+- Pure implementation steps → Codex Max (or Sonnet 4.5 if you want a fast generalist).
 
 ## Execution plan
 
@@ -30,9 +30,9 @@ Rule of thumb:
 
 Actions:
 - Decide the canonical Tier-2 outbound stream name:
-  - Recommended: keep **outbound** (since itâ€™s already used in code).
+  - Recommended: keep **outbound** (since it’s already used in code).
   - Ensure Redis keys exist: `{tenant}:orchestrators:outbound:tasks/results`.
-- Ensure Tier-3 stream names match whatâ€™s already in Redis:
+- Ensure Tier-3 stream names match what’s already in Redis:
   - Scheduler maps to **booking** streams.
   - Channel sequencer maps to **sequencing** streams.
 - Update any remaining references to old names (`outreach`, `channel_sequencer_agent`, `scheduler_agent`) in:
@@ -44,7 +44,7 @@ Actions:
 **Model:** GPT-5.2 (Preview)
 
 ### 2) Ensure Tier-2 outbound orchestrator consumer exists and matches leads pattern
-**Outcome:** A consumer under `tiers/tier_2/<outbound-orchestrator>/consumer.py` that behaves like Leadsâ€™ consumer:
+**Outcome:** A consumer under `tiers/tier_2/<outbound-orchestrator>/consumer.py` that behaves like Leads’ consumer:
 - reads `{tenant}:orchestrators:outbound:tasks`
 - writes `{tenant}:orchestrators:outbound:results`
 - parses typed envelopes and emits result/error envelopes
@@ -98,7 +98,7 @@ Actions:
 **Model:** Codex Max (implementation), GPT-5.2 (if diagnosing tricky failures)
 
 ### 6) Optional: Deduplication stream cleanup
-**Outcome:** No dangling streams in registry for agents that donâ€™t exist.
+**Outcome:** No dangling streams in registry for agents that don’t exist.
 
 Actions:
 - If DeduplicationAgent is not being built now:
@@ -122,7 +122,7 @@ Actions:
 Prereqs:
 - Create `deployment/.env` (it is gitignored). At minimum set:
   - `TENANT_ID=agentic-dev`
-  - `REDIS_URL_DOCKER=redis://<REDACTED_REDIS_URL>
+  - `REDIS_URL_DOCKER=redis://redis:6379/0`
   - `SUPABASE_URL=...` and `SUPABASE_KEY=...` (if running persistence)
   - `OPENAI_API_KEY=...` (if running copywriter)
 
@@ -130,7 +130,7 @@ Recommended local verification loop (matches the dev loop section):
 - `& ".\.venv\Scripts\python.exe" -m pytest tests\smoke -v`
 - `& ".\.venv\Scripts\python.exe" -m pytest tests\integration -v`
 
-Compose validation (safe â€” does NOT print interpolated secrets):
+Compose validation (safe — does NOT print interpolated secrets):
 - `docker compose -f deployment\docker-compose.yml config --no-interpolate`
 
 Bring up the Docker stack:
@@ -181,4 +181,3 @@ And the audit should report these streams + groups as present (or created when s
 - Manager routes outbound work to the outbound orchestrator stream.
 
 ```
-

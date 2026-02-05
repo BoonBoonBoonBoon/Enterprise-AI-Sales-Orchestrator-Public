@@ -49,7 +49,10 @@ class SupabaseAdapter:
 		self.url = url.rstrip("/")
 		self.key = key
 		self.anon_key = anon_key  # For custom JWT authentication pattern
-		self.client = client or create_client(url, key)
+		# If using custom JWT auth, the Supabase SDK should still be initialized with a real API key
+		# (anon/service key). The JWT is used as the Authorization bearer token in REST fallback.
+		sdk_key = anon_key or key
+		self.client = client or create_client(url, sdk_key)
 		# Adapter capability metadata; consulted by higher-level planners (RAG, etc.)
 		self.capabilities = {
 			"equality_filters": True,
@@ -60,8 +63,17 @@ class SupabaseAdapter:
 			"range_operators": False,
 			"in_operator": False,
 		}
+		self._rest_session = None
 
 	# -------------------------------------------------- Write Ops ---------
+	def rpc(self, function: str, params: Optional[Dict[str, Any]] = None) -> Any:
+		"""Call a Postgres function via Supabase RPC."""
+		if self.anon_key:
+			return self._rest_rpc(function, params or {})
+		resp = self.client.rpc(function, params or {}).execute()
+		data = getattr(resp, "data", None) if not isinstance(resp, dict) else resp.get("data")
+		return data
+
 	def write(self, table: str, record: Dict[str, Any]) -> Dict[str, Any]:
 		# If using custom JWT (anon_key provided), use REST API
 		if self.anon_key:
@@ -90,9 +102,11 @@ class SupabaseAdapter:
 			return self._rest_upsert(table, record, on_conflict)
 		# Otherwise use SDK
 		resp = None
+		# Convert on_conflict list to comma-separated string for SDK
+		on_conflict_str = ",".join(on_conflict) if on_conflict else ""
 		try:
-			if on_conflict:
-				resp = self.client.table(table).upsert(record, on_conflict=on_conflict).execute()
+			if on_conflict_str:
+				resp = self.client.table(table).upsert(record, on_conflict=on_conflict_str).execute()
 			else:
 				resp = self.client.table(table).upsert(record).execute()
 		except TypeError:
@@ -126,6 +140,9 @@ class SupabaseAdapter:
 
 	# -------------------------------------------------- Read Ops ----------
 	def read(self, table: str, id_value: Any, id_column: str = "id") -> Optional[Dict[str, Any]]:
+		# In custom JWT mode, always use REST so Authorization uses the JWT bearer token.
+		if self.anon_key:
+			return self._rest_read(table, id_value, id_column)
 		try:
 			resp = self.client.table(table).select("*").eq(id_column, id_value).limit(1).execute()
 			data = getattr(resp, "data", None) if not isinstance(resp, dict) else resp.get("data")
@@ -152,6 +169,16 @@ class SupabaseAdapter:
 		- select projects columns if provided.
 		- On SDK errors, falls back to REST with equivalent semantics.
 		"""
+		# In custom JWT mode, always use REST so Authorization uses the JWT bearer token.
+		if self.anon_key:
+			return self._rest_query(
+				table,
+				filters=filters,
+				limit=limit,
+				order_by=order_by,
+				descending=descending,
+				select=select,
+			)
 		try:
 			projection = "*" if not select else ",".join(select)
 			q = self.client.table(table).select(projection)
@@ -195,6 +222,67 @@ class SupabaseAdapter:
 		return None
 
 	# -------------------------------------------------- REST Fallbacks ----
+	def _get_rest_session(self):
+		if self._rest_session is not None:
+			return self._rest_session
+		import requests  # type: ignore
+		from requests.adapters import HTTPAdapter  # type: ignore
+		try:  # pragma: no cover - fallback import for older vendored urllib3
+			from urllib3.util.retry import Retry  # type: ignore
+		except Exception:  # pragma: no cover
+			from requests.packages.urllib3.util.retry import Retry  # type: ignore
+
+		retries = int(os.environ.get("SUPABASE_REST_RETRIES", "3"))
+		backoff = float(os.environ.get("SUPABASE_REST_BACKOFF", "0.5"))
+		status_forcelist = (429, 500, 502, 503, 504)
+		allowed_methods = frozenset([
+			"HEAD",
+			"GET",
+			"POST",
+			"PUT",
+			"DELETE",
+			"OPTIONS",
+			"TRACE",
+			"PATCH",
+		])
+		retry = Retry(
+			total=retries,
+			connect=retries,
+			read=retries,
+			status=retries,
+			backoff_factor=backoff,
+			status_forcelist=status_forcelist,
+			allowed_methods=allowed_methods,
+			raise_on_status=False,
+		)
+		adapter = HTTPAdapter(max_retries=retry)
+		session = requests.Session()
+		session.mount("http://", adapter)
+		session.mount("https://", adapter)
+		self._rest_session = session
+		return session
+
+	def _rest_timeout(self, kind: str = "default") -> float:
+		default_timeout = float(os.environ.get("SUPABASE_REST_TIMEOUT_S", "15"))
+		if kind == "rpc":
+			return float(os.environ.get("SUPABASE_REST_RPC_TIMEOUT_S", str(default_timeout)))
+		return default_timeout
+
+	def _rest_rpc(self, function: str, params: Dict[str, Any]) -> Any:
+		url = f"{self.url}/rest/v1/rpc/{function}"
+		session = self._get_rest_session()
+		r = session.post(
+			url,
+			headers=self._rest_headers(),
+			json=params,
+			timeout=self._rest_timeout("rpc"),
+		)
+		if r.status_code in (200, 201, 204):
+			try:
+				return r.json()
+			except Exception:
+				return None
+		raise ValueError(f"RPC {function} failed ({r.status_code}): {r.text}")
 	def _rest_headers(self) -> Dict[str, str]:
 		# If anon_key is provided, use it for apikey and key for Authorization (custom JWT pattern)
 		if self.anon_key:
@@ -213,11 +301,10 @@ class SupabaseAdapter:
 		}
 
 	def _rest_read(self, table: str, id_value: Any, id_column: str) -> Optional[Dict[str, Any]]:
-		import requests, json  # type: ignore
-
 		url = f"{self.url}/rest/v1/{table}"
 		params = {id_column: f"eq.{id_value}", "limit": 1}
-		r = requests.get(url, headers=self._rest_headers(), params=params, timeout=15)
+		session = self._get_rest_session()
+		r = session.get(url, headers=self._rest_headers(), params=params, timeout=self._rest_timeout())
 		if r.status_code == 200:
 			try:
 				data = r.json()
@@ -236,8 +323,6 @@ class SupabaseAdapter:
 		descending: bool = False,
 		select: Optional[List[str]] = None,
 	) -> List[Dict[str, Any]]:
-		import requests  # type: ignore
-
 		url = f"{self.url}/rest/v1/{table}"
 		params: Dict[str, Any] = {}
 		if select:
@@ -258,7 +343,8 @@ class SupabaseAdapter:
 				print(f"[SUPABASE TRACE] query rest url={url} params={params}")
 			except Exception:
 				pass
-		r = requests.get(url, headers=self._rest_headers(), params=params, timeout=15)
+		session = self._get_rest_session()
+		r = session.get(url, headers=self._rest_headers(), params=params, timeout=self._rest_timeout())
 		if r.status_code == 200:
 			try:
 				data = r.json()
@@ -268,10 +354,12 @@ class SupabaseAdapter:
 		return []
 
 	def _rest_write(self, table: str, record: Dict[str, Any]) -> Dict[str, Any]:
-		import requests, json  # type: ignore
-
 		url = f"{self.url}/rest/v1/{table}"
-		r = requests.post(url, headers=self._rest_headers(), json=record, timeout=15)
+		headers = self._rest_headers()
+		# Ensure we get the inserted row back (including id) for FK chaining.
+		headers["Prefer"] = "return=representation"
+		session = self._get_rest_session()
+		r = session.post(url, headers=headers, json=record, timeout=self._rest_timeout())
 		if r.status_code in [200, 201]:
 			try:
 				data = r.json()
@@ -283,10 +371,12 @@ class SupabaseAdapter:
 		raise Exception(f"Write failed: {r.status_code} - {r.text[:200]}")
 
 	def _rest_batch_write(self, table: str, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-		import requests, json  # type: ignore
-
 		url = f"{self.url}/rest/v1/{table}"
-		r = requests.post(url, headers=self._rest_headers(), json=records, timeout=15)
+		headers = self._rest_headers()
+		# Ensure we get inserted rows back (including ids) for downstream reference resolution.
+		headers["Prefer"] = "return=representation"
+		session = self._get_rest_session()
+		r = session.post(url, headers=headers, json=records, timeout=self._rest_timeout())
 		if r.status_code in [200, 201]:
 			try:
 				data = r.json()
@@ -298,16 +388,22 @@ class SupabaseAdapter:
 	def _rest_upsert(
 		self, table: str, record: Dict[str, Any], on_conflict: Optional[List[str]] = None
 	) -> Dict[str, Any]:
-		import requests, json  # type: ignore
-
 		url = f"{self.url}/rest/v1/{table}"
 		headers = self._rest_headers()
 		# return=representation ensures we get the inserted/updated record back (including id)
 		headers["Prefer"] = "return=representation,resolution=merge-duplicates"
+		params: Dict[str, Any] = {}
+		# PostgREST expects on_conflict as a query parameter, not in the Prefer header.
 		if on_conflict:
-			headers["Prefer"] += f",on_conflict={','.join(on_conflict)}"
-		
-		r = requests.post(url, headers=headers, json=record, timeout=15)
+			params["on_conflict"] = ",".join(on_conflict)
+		session = self._get_rest_session()
+		r = session.post(
+			url,
+			headers=headers,
+			params=params or None,
+			json=record,
+			timeout=self._rest_timeout(),
+		)
 		if r.status_code in [200, 201]:
 			try:
 				data = r.json()
@@ -316,19 +412,16 @@ class SupabaseAdapter:
 				return {"status": "ok", "raw": data}
 			except Exception:
 				return {"status": "ok"}
-		# Fallback to regular insert if upsert fails
-		return self._rest_write(table, record)
+		raise Exception(f"Upsert failed: {r.status_code} - {r.text[:200]}")
 
 	def _rest_delete(self, table: str, id_value: str, id_column: str = "id") -> Dict[str, Any]:
 		"""Delete using REST API with custom JWT."""
-		import requests  # type: ignore
-
 		try:
 			url = f"{self.url}/rest/v1/{table}?{id_column}=eq.{id_value}"
 			headers = self._rest_headers()
 			headers["Prefer"] = "return=representation"
-			
-			response = requests.delete(url, headers=headers, timeout=10)
+			session = self._get_rest_session()
+			response = session.delete(url, headers=headers, timeout=self._rest_timeout())
 			
 			if response.status_code in (200, 204):
 				return {"status": "ok", "deleted_count": 1}

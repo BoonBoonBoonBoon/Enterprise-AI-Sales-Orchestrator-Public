@@ -59,13 +59,13 @@ Orchestrators can **ONLY** communicate:
 | ------------------------------------ | --------- | ------------------------------------- | ----------------------------------------- |
 | [Leads Orchestrator](leads.md)       | ✅ Active | `tiers/tier_2/leads_orchestrator/`    | Lead qualification, enrichment, promotion |
 | [Outreach Orchestrator](outreach.md) | ✅ Active | `tiers/tier_2/outreach_orchestrator/` | Campaign execution, reply generation      |
+| [Audit Orchestrator](audit.md)       | ✅ Active | `tiers/tier_2/audit_orchestrator/`    | Compliance validation, audit trails       |
 
 ### In Development
 
 | Orchestrator                       | Status      | Path                                 | Planned Purpose                            |
 | ---------------------------------- | ----------- | ------------------------------------ | ------------------------------------------ |
-| [Inbound Orchestrator](inbound.md) | 🚧 Skeleton | `tiers/tier_2/inbound_orchestrator/` | Inbound message classification and routing |
-| Audit Orchestrator                 | 🚧 Skeleton | `tiers/tier_2/audit_orchestrator/`   | Compliance and quality auditing            |
+| [Inbound Orchestrator](inbound.md) | ✅ Active   | `tiers/tier_2/inbound_orchestrator/` | Inbound message classification and routing |
 | Control Orchestrator               | 🚧 Skeleton | `tiers/tier_2/control_orchestrator/` | System control and configuration           |
 
 See [Roadmap → In Progress](../../roadmap/in-progress.md) for development status.

@@ -14,10 +14,12 @@ Architecture:
 """
 
 import logging
+import json
 import os
 import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from email.utils import parseaddr
 from langchain.tools import tool
 from deepagents import create_deep_agent
 import redis
@@ -31,6 +33,7 @@ except ImportError:
 from services.persistence.service import PersistenceService
 from config.persistence_config import get_write_allowlist
 from core.schemas.persistence import CompoundPayload
+from core.security.prompt_hardening import get_hardened_internal_prompt
 from tiers.tier_3.persistence_agent.compound_handler import (
     execute_compound,
     build_inbound_email_compound,
@@ -80,6 +83,8 @@ class PersistenceAgent:
         self.tenant_id = tenant_id
         self.model = model
         self.service = service  # Legacy compatibility
+        self.use_langgraph = os.getenv("LANGGRAPH_WORKFLOWS_ENABLED", "1").lower() in ("1", "true", "yes")
+        self._graph_runner = None
         
         # Convert tenant_id string to UUID for database client_id field
         # Use UUID5 for deterministic mapping: "agentic-dev" → same UUID always
@@ -90,6 +95,24 @@ class PersistenceAgent:
             "CAMPAIGN_ID_PLACEHOLDER",
             "9646f98a-e987-4a8c-b786-9b82ea985d38",
         )
+
+        # Optional mailbox→campaign routing for inbound/outbound association.
+        # Format: {"inbox@agency.com": "<campaign-uuid>", ...}
+        self.mailbox_campaign_id_map: Dict[str, str] = {}
+        raw_mailbox_map = os.environ.get("MAILBOX_CAMPAIGN_ID_MAP")
+        if raw_mailbox_map:
+            try:
+                parsed = json.loads(raw_mailbox_map)
+                if isinstance(parsed, dict):
+                    self.mailbox_campaign_id_map = {
+                        str(k).strip().lower(): str(v).strip()
+                        for k, v in parsed.items()
+                        if k and v
+                    }
+                else:
+                    logger.warning("MAILBOX_CAMPAIGN_ID_MAP must be a JSON object")
+            except Exception as exc:
+                logger.warning(f"Invalid MAILBOX_CAMPAIGN_ID_MAP JSON: {exc}")
         
         # Initialize Supabase adapter for database writes (WRITE ONLY)
         self.supabase = None
@@ -135,7 +158,7 @@ class PersistenceAgent:
     
     def _get_system_prompt(self) -> str:
         """System prompt defining Persistence Agent role and write operations"""
-        return f"""You are the Persistence Agent - Database write specialist.
+        base_prompt = f"""You are the Persistence Agent - Database write specialist.
 
 **Your Role:**
 Write data to Supabase for leads, conversations, and messages. WRITE ONLY - no reads.
@@ -233,6 +256,7 @@ Return ONLY essential fields:
 Tenant: {self.tenant_id}
 Current task: {{input}}
 """
+        return get_hardened_internal_prompt(base_prompt)
     
     def _build_tools(self) -> List:
         """Build Persistence write tools - schema-specific operations for 4 core tables"""
@@ -420,24 +444,37 @@ Current task: {{input}}
 
                 lead_id = str(uuid.uuid4())
 
-                if not campaign_id:
-                    campaign_id = "00000000-0000-0000-0000-000000000000"
+                now_iso = datetime.utcnow().isoformat()
+
+                resolved_client_id = staging_data.get("client_id") or self.client_uuid
+                resolved_campaign_id = (
+                    campaign_id
+                    or staging_data.get("campaign_id")
+                    or "00000000-0000-0000-0000-000000000000"
+                )
 
                 lead_record = {
                     "id": lead_id,
-                    "client_id": self.client_uuid,
+                    "client_id": resolved_client_id,
                     "email": staging_data.get("email"),
                     "first_name": staging_data.get("first_name"),
                     "last_name": staging_data.get("last_name"),
                     "company_name": staging_data.get("company_name"),
                     "job_title": staging_data.get("job_title"),
                     "phone_number": staging_data.get("phone_number", ""),
-                    "sequence_step": 0,
-                    "current_status": "active",
+                    # Required defaults for NOT NULL leads columns (see integration tests)
+                    "sequence_step": int(staging_data.get("sequence_step") or 1),
+                    "sequence_active": bool(staging_data.get("sequence_active", True)),
+                    "booking_status": staging_data.get("booking_status") or "not_booked",
+                    "last_contact_date": staging_data.get("last_contact_date") or now_iso,
+                    "next_action_date": staging_data.get("next_action_date") or now_iso,
+                    "re_engagement_date": staging_data.get("re_engagement_date") or now_iso,
+                    "current_status": staging_data.get("current_status") or "new",
                     "lead_score": lead_score,
-                    "campaign_id": campaign_id,
+                    "campaign_id": resolved_campaign_id,
+                    "qualification_status": staging_data.get("qualification_status"),
                     "source": staging_data.get("source"),
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": now_iso,
                 }
 
                 supabase.write(table="leads", record=lead_record)
@@ -457,12 +494,14 @@ Current task: {{input}}
                     new_conv_id = str(uuid.uuid4())
                     conv_record = {
                         "id": new_conv_id,
-                        "client_id": self.client_uuid,
+                        "client_id": resolved_client_id,
                         "lead_id": lead_id,
+                        "thread_id": staging_conv.get("thread_id"),
+                        "subject": staging_conv.get("subject"),
                         "channel": staging_conv.get("channel", "email"),
                         "status": staging_conv.get("status", "active"),
                         "metadata": staging_conv.get("metadata", {}),
-                        "created_at": staging_conv.get("created_at") or datetime.utcnow().isoformat(),
+                        "created_at": staging_conv.get("created_at") or now_iso,
                     }
                     supabase.write(table="conversations", record=conv_record)
                     conversations_created += 1
@@ -489,7 +528,7 @@ Current task: {{input}}
                                 "text_content": staging_msg.get("text_content") or staging_msg.get("content") or "",
                                 "metadata": meta,
                                 "sent_at": staging_msg.get("sent_at") or staging_msg.get("created_at"),
-                                "created_at": staging_msg.get("created_at") or datetime.utcnow().isoformat(),
+                                "created_at": staging_msg.get("created_at") or now_iso,
                             },
                         )
                         messages_created += 1
@@ -499,8 +538,8 @@ Current task: {{input}}
                     record={
                         "id": staging_lead_id,
                         "enrichment_status": "promoted",
-                        "archived_at": datetime.utcnow().isoformat(),
-                        "updated_at": datetime.utcnow().isoformat(),
+                        "archived_at": now_iso,
+                        "updated_at": now_iso,
                     },
                     on_conflict=["id"],
                 )
@@ -977,7 +1016,52 @@ Current task: {{input}}
     
     # ==================== EXECUTION METHODS ====================
     
+    def _get_graph_runner(self):
+        if self._graph_runner is not None:
+            return self._graph_runner
+        from core.langgraph import LangGraphRunner
+
+        async def _execute_graph(state):
+            task_data_or_goal = state.get("task_data_or_goal")
+            context = state.get("context") or {}
+            return await self._execute_core(task_data_or_goal, context)
+
+        async def _guardrails(state):
+            output = state.get("output") or {}
+            if output.get("status") == "error":
+                return output
+            return output
+
+        self._graph_runner = LangGraphRunner(
+            name="persistence",
+            execute_fn=_execute_graph,
+            required_input_keys=["task_data_or_goal"],
+            guardrails_fn=_guardrails,
+        )
+        return self._graph_runner
+
     async def execute(self, task_data_or_goal, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        if self.use_langgraph:
+            runner = self._get_graph_runner()
+            graph_result = await runner.run(
+                state_input={
+                    "task_data_or_goal": task_data_or_goal,
+                    "context": context or {},
+                    "task_id": task_data_or_goal.get("task_id") if isinstance(task_data_or_goal, dict) else None,
+                    "correlation_id": task_data_or_goal.get("correlation_id") if isinstance(task_data_or_goal, dict) else None,
+                },
+                execution_id=str(task_data_or_goal.get("task_id") if isinstance(task_data_or_goal, dict) else ""),
+            )
+            if graph_result.get("status") == "success":
+                return graph_result.get("output", {})
+            return {
+                "status": "error",
+                "error": graph_result.get("error", "langgraph_failed"),
+                "trace": graph_result.get("trace", []),
+            }
+        return await self._execute_core(task_data_or_goal, context)
+
+    async def _execute_core(self, task_data_or_goal, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Execute a persistence write task.
         
@@ -1038,8 +1122,16 @@ Current task: {{input}}
             )
     
     def _handle_compound(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute a compound payload using the available adapter."""
-        adapter = self.service or self.supabase
+        """Execute a compound payload using the available adapter.
+        
+        NOTE: For compound operations we prefer the raw Supabase adapter over the
+        PersistenceService wrapper. This is because compound operations are transactional
+        and we need actual database failures to propagate (not be silently caught by
+        hybrid adapter fallbacks). If the raw adapter is unavailable, we fall back to
+        the service but compound integrity may be compromised on partial failures.
+        """
+        # Prefer raw Supabase adapter for compound operations to avoid silent fallback
+        adapter = self.supabase or self.service
         if not adapter:
             return {
                 "status": "error",
@@ -1058,6 +1150,66 @@ Current task: {{input}}
 
             if not isinstance(steps, list):
                 return
+
+            def _infer_campaign_id_from_steps(steps_list: List[dict]) -> Optional[str]:
+                """Infer campaign_id from message metadata (mailbox routing).
+
+                Looks for a matching mailbox address in `MAILBOX_CAMPAIGN_ID_MAP`.
+                Priority:
+                - inbound: metadata.to
+                - outbound: metadata.from
+                """
+
+                if not self.mailbox_campaign_id_map:
+                    return None
+
+                target_tables = {"messages", "staging_messages"}
+
+                def _extract_email(value: Any) -> Optional[str]:
+                    if not value:
+                        return None
+                    if isinstance(value, list):
+                        # Take first usable entry
+                        for item in value:
+                            email_val = _extract_email(item)
+                            if email_val:
+                                return email_val
+                        return None
+                    if not isinstance(value, str):
+                        return None
+                    addr = parseaddr(value)[1] or value
+                    addr = addr.strip().lower()
+                    return addr or None
+
+                for step in steps_list:
+                    if not isinstance(step, dict):
+                        continue
+                    table = step.get("table")
+                    if table not in target_tables:
+                        continue
+
+                    data = step.get("data")
+                    records: List[dict] = []
+                    if isinstance(data, dict):
+                        records = [data]
+                    elif isinstance(data, list):
+                        records = [r for r in data if isinstance(r, dict)]
+
+                    for record in records:
+                        meta = record.get("metadata")
+                        if not isinstance(meta, dict):
+                            continue
+
+                        inbound_to = _extract_email(meta.get("to") or meta.get("inbox") or meta.get("mailbox"))
+                        outbound_from = _extract_email(meta.get("from") or meta.get("sender") or meta.get("from_email"))
+
+                        for candidate in (inbound_to, outbound_from):
+                            if candidate and candidate in self.mailbox_campaign_id_map:
+                                return self.mailbox_campaign_id_map[candidate]
+
+                return None
+
+            inferred_campaign_id = _infer_campaign_id_from_steps(steps)
 
             # Tables that require client_id injection
             client_id_tables = {
@@ -1091,7 +1243,7 @@ Current task: {{input}}
                     # Inject campaign placeholder when absent
                     if table in campaign_id_tables:
                         if "campaign_id" not in record or record.get("campaign_id") in (None, ""):
-                            record["campaign_id"] = self.campaign_placeholder
+                            record["campaign_id"] = inferred_campaign_id or self.campaign_placeholder
 
                 if isinstance(data, dict):
                     inject_into_record(data)
@@ -1100,6 +1252,38 @@ Current task: {{input}}
                         if isinstance(item, dict):
                             inject_into_record(item)
 
+        def _inject_correlation_id(steps: Any, correlation_id: Optional[str]) -> None:
+            """Add correlation_id into messages/staging_messages metadata if missing."""
+
+            if not correlation_id or not isinstance(steps, list):
+                return
+
+            target_tables = {"messages", "staging_messages"}
+
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                table = step.get("table")
+                if table not in target_tables:
+                    continue
+
+                data = step.get("data")
+
+                def ensure_metadata(record: dict) -> None:
+                    meta = record.get("metadata")
+                    if meta is None:
+                        meta = {}
+                    if isinstance(meta, dict) and "correlation_id" not in meta:
+                        meta["correlation_id"] = correlation_id
+                    record["metadata"] = meta
+
+                if isinstance(data, dict):
+                    ensure_metadata(data)
+                elif isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict):
+                            ensure_metadata(item)
+
         try:
             # Normalize legacy key
             if "operations" in task_data and "steps" not in task_data:
@@ -1107,6 +1291,7 @@ Current task: {{input}}
 
             # Ensure tenant scoping for compound writes (injects client_id + campaign_id)
             _inject_scoping_fields(task_data.get("steps"))
+            _inject_correlation_id(task_data.get("steps"), task_data.get("correlation_id"))
 
             payload = CompoundPayload(**task_data)
         except Exception as exc:
@@ -1161,6 +1346,41 @@ Current task: {{input}}
                     descending=descending,
                     select=select if isinstance(select, list) else None,
                 )
+            elif operation == "promote_staging_lead":
+                # Promote staging lead to qualified leads table
+                staging_lead_id = task_data.get("staging_lead_id")
+                lead_score = task_data.get("lead_score", 50)
+                campaign_id = task_data.get("campaign_id")
+                qualification_status = task_data.get("qualification_status", "qualified")
+                
+                if not staging_lead_id:
+                    return {
+                        "status": "error",
+                        "error": "staging_lead_id is required for promote_staging_lead operation"
+                    }
+                
+                # Get the promote tool and call it
+                promote_tool = self._create_promote_staging_lead_tool()
+                result = promote_tool.invoke({
+                    "staging_lead_id": staging_lead_id,
+                    "lead_score": lead_score,
+                    "campaign_id": campaign_id,
+                })
+                
+                # If promotion was successful, update qualification status
+                if result.get("status") == "success" and self.supabase:
+                    try:
+                        self.supabase.upsert(
+                            "staging_leads",
+                            {
+                                "id": staging_lead_id,
+                                "qualification_status": qualification_status,
+                                "enrichment_status": "promoted",
+                            },
+                            on_conflict=["id"],
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to update staging lead qualification status: {e}")
             else:
                 return {
                     "status": "error",

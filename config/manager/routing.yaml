@@ -7,9 +7,13 @@ intents:
   lead_enrichment: [leads]
   outreach: [outreach]
   audit: [audit]
-  # Inbound email is currently handled by LeadsOrchestrator (deep reply flow + persistence/RAG)
-  # and then chained by Manager to Outbound for Copywriter.
-  inbound: [leads]
+  # Inbound email now goes through Inbound Orchestrator for classification.
+  # The Inbound Orchestrator will:
+  # 1. Classify the email (personal, newsletter, bounce, etc.)
+  # 2. Route to Leads Orchestrator if actionable (personal, business_inquiry)
+  # 3. Store-only for newsletters/marketing (no reply)
+  # 4. Drop bounces/spam
+  inbound: [inbound]
   control: [control]
 
 # When an intent is unknown or has no mapping, send to this orchestrator

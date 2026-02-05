@@ -9,6 +9,17 @@ The development roadmap for the Agentic System, including current priorities, in
 
 The system is in active development with core infrastructure complete and primary workflows functional.
 
+## Work Completed (Jan 2026)
+
+- MVP-safe outbound execution in Channel Sequencer (approval mode, hard-stops, throttles): `components/tier-3/channel-sequencer.md`
+- Outbound persistence enqueue for audit/history (conversations + messages): `components/tier-3/channel-sequencer.md`
+- Atomic staging-lead promotion via Supabase RPC (with fallback path): `components/tier-3/persistence.md`
+- Env-var reference updated for outbound safety controls: `reference/config/env-vars.md`
+- Canonical typed message envelope + legacy normalization; envelope docs aligned: `concepts/envelope.md`, `reference/api/envelope.md`
+- DLQ wiring standardized across consumers (max retries → DLQ + ACK): `core/dlq.py`
+
+For a tighter narrative of January’s changes, see: [ADR-007 (January 2026 Summary)](../architecture/decisions/007-january-2026-summary.md)
+
 ## Roadmap Overview
 
 <div class="grid cards" markdown>
@@ -56,8 +67,8 @@ gantt
     Inbound Orchestrator    :active,  2026-01, 2026-02
     Scheduler Agent         :active,  2026-01, 2026-02
     Observability           :active,  2026-01, 2026-02
+    Channel Sequencer       :active,  2026-01, 2026-02
     section Future
-    Channel Sequencer       :         2026-02, 2026-03
     Model Switching         :         2026-03, 2026-04
     Fine-tuning Pipeline    :         2026-04, 2026-06
 ```
@@ -74,11 +85,11 @@ gantt
 
 ### P1 — High (Next Sprint)
 
-| Item                           | Status     |
-| ------------------------------ | ---------- |
-| Scheduler Agent implementation | 📋 Planned |
-| Channel Sequencer Agent        | 📋 Planned |
-| Rate limiting & quotas         | 📋 Planned |
+| Item                           | Status         |
+| ------------------------------ | -------------- |
+| Scheduler Agent implementation | 📋 Planned     |
+| Channel Sequencer Agent        | 🚧 In Progress |
+| Rate limiting & quotas         | 📋 Planned     |
 
 ### P2 — Medium (Backlog)
 
@@ -125,7 +136,7 @@ gantt
 | Persistence Agent | ✅ Complete    |
 | Copywriter Agent  | ✅ Complete    |
 | Scheduler Agent   | 🚧 In Progress |
-| Channel Sequencer | 📋 Skeleton    |
+| Channel Sequencer | 🚧 In Progress |
 
 ### Services
 

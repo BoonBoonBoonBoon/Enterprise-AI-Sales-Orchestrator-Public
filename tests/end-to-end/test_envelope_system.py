@@ -14,12 +14,12 @@ from pathlib import Path
 from typing import Dict, Any
 import json
 
-# Add repo to path
-repo_root = Path(__file__).resolve().parent
-if str(repo_root) not in sys.path:
-    sys.path.insert(0, str(repo_root))
+# Add project root to path (for direct execution outside pytest)
+project_root = Path(__file__).resolve().parents[2]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-from agent.utils.typed_envelope import (
+from core.envelope.typed_envelope import (
     task,
     result,
     error,

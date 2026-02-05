@@ -1,4 +1,4 @@
-﻿# Redis Service Architecture
+# Redis Service Architecture
 
 Complete reference for Redis infrastructure, streams, and operational procedures in the Agentic System.
 
@@ -23,7 +23,8 @@ Complete reference for Redis infrastructure, streams, and operational procedures
 ## Overview
 
 Redis Streams is the core messaging backbone for the Agentic System, enabling:
-- **Asynchronous task delegation** between tiers (Manager â†’ Orchestrators â†’ Agents)
+
+- **Asynchronous task delegation** between tiers (Manager → Orchestrators → Agents)
 - **At-least-once delivery semantics** with consumer groups
 - **Horizontal scaling** through load-balanced message distribution
 - **Fault tolerance** with automatic recovery and retry logic
@@ -44,22 +45,25 @@ Redis Streams is the core messaging backbone for the Agentic System, enabling:
 ### Connection Details
 
 **Current Deployment:**
-- **Host:** `your-redis-host.redns.redis-cloud.com`
+
+- **Host:** `redis-15143.c335.europe-west2-1.gce.redns.redis-cloud.com`
 - **Port:** `15143`
 - **Version:** `8.0.2`
-- **Protocol:** Non-TLS (`redis://<REDACTED_REDIS_URL>
+- **Protocol:** Non-TLS (`redis://`)
 - **Authentication:** Password-based
 
 **Environment Configuration:**
+
 ```bash
 # .env
-REDIS_URL=redis://<REDACTED_REDIS_URL>
+REDIS_URL=redis://default:<REDIS_PASSWORD>@redis-15143.c335.europe-west2-1.gce.redns.redis-cloud.com:15143
 REDIS_NAMESPACE=agentic-dev
 ```
 
 **Connection String Format:**
+
 ```
-redis://<REDACTED_REDIS_URL>
+redis://[username]:[password]@[host]:[port]/[db]
 ```
 
 ### Namespace & Key Structure
@@ -69,6 +73,7 @@ All keys are prefixed with `REDIS_NAMESPACE` for environment isolation:
 **Key Pattern:** `{namespace}:{domain}:{key}`
 
 **Examples:**
+
 - Stream: `agentic-dev:rag:tasks`
 - Heartbeat: `agentic-dev:ops:hb:rag:worker-1`
 - Workflow state: `agentic-dev:workflow:state:correlation-123`
@@ -80,65 +85,65 @@ All keys are prefixed with `REDIS_NAMESPACE` for environment isolation:
 The system uses a three-tier architecture where each tier communicates via dedicated Redis Streams:
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                        TIER 1: MANAGER                          â”‚
-â”‚  (Strategic AI - Goal decomposition & orchestrator delegation)  â”‚
-â”‚  Streams: manager:tasks, manager:results                         â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                              â”‚
-                              â”‚ XADD (delegate tasks)
-                              â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                    TIER 2: ORCHESTRATORS                        â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
-â”‚  â”‚    Leads     â”‚  â”‚    Outreach     â”‚  â”‚   Future Orch.   â”‚   â”‚
-â”‚  â”‚ Orchestrator â”‚  â”‚  Orchestrator   â”‚  â”‚   (Coding/Data)  â”‚   â”‚
-â”‚  â”‚leads:tasks   â”‚  â”‚outreach:tasks   â”‚  â”‚                  â”‚   â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                              â”‚
-                              â”‚ XADD (delegate sub-tasks)
-                              â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                 TIER 3: OPERATIONAL AGENTS                      â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
-â”‚  â”‚   RAG    â”‚  â”‚Copywriterâ”‚  â”‚Booking  â”‚  â”‚   Sequencing   â”‚   â”‚
-â”‚  â”‚  Agent   â”‚  â”‚  Agent   â”‚  â”‚ Agent   â”‚  â”‚     Agent      â”‚   â”‚
-â”‚  â”‚rag:tasks â”‚  â”‚copy:tasksâ”‚  â”‚booking: â”‚  â”‚sequencing:     â”‚   â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                              â”‚
-â”‚  â”‚Persistence â”‚  â”‚Deduplication â”‚                              â”‚
-â”‚  â”‚   Agent    â”‚  â”‚    Agent     â”‚                              â”‚
-â”‚  â”‚persist:    â”‚  â”‚dedup:tasks   â”‚                              â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                              â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────────────┐
+│                        TIER 1: MANAGER                          │
+│  (Strategic AI - Goal decomposition & orchestrator delegation)  │
+│  Streams: manager:tasks, manager:results                         │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ XADD (delegate tasks)
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    TIER 2: ORCHESTRATORS                        │
+│  ┌──────────────┐  ┌─────────────────┐  ┌──────────────────┐   │
+│  │    Leads     │  │    Outreach     │  │   Future Orch.   │   │
+│  │ Orchestrator │  │  Orchestrator   │  │   (Coding/Data)  │   │
+│  │leads:tasks   │  │outreach:tasks   │  │                  │   │
+│  └──────────────┘  └─────────────────┘  └──────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ XADD (delegate sub-tasks)
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                 TIER 3: OPERATIONAL AGENTS                      │
+│  ┌──────────┐  ┌─────────┐  ┌─────────┐  ┌────────────────┐   │
+│  │   RAG    │  │Copywriter│  │Booking  │  │   Sequencing   │   │
+│  │  Agent   │  │  Agent   │  │ Agent   │  │     Agent      │   │
+│  │rag:tasks │  │copy:tasks│  │booking: │  │sequencing:     │   │
+│  └──────────┘  └─────────┘  └─────────┘  └────────────────┘   │
+│  ┌────────────┐  ┌──────────────┐                              │
+│  │Persistence │  │Deduplication │                              │
+│  │   Agent    │  │    Agent     │                              │
+│  │persist:    │  │dedup:tasks   │                              │
+│  └────────────┘  └──────────────┘                              │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Current Active Streams
 
-#### âœ… Tier 1: Manager (External Entry Point)
+#### ✅ Tier 1: Manager (External Entry Point)
 
-| Stream | Purpose | Consumer Group | Status |
-|--------|---------|----------------|--------|
-| `{tenant}:manager:tasks` | External requests | `manager-workers` | âœ… Active |
-| `{tenant}:manager:results` | Final results | N/A (XREAD only) | âœ… Active |
+| Stream                     | Purpose           | Consumer Group    | Status    |
+| -------------------------- | ----------------- | ----------------- | --------- |
+| `{tenant}:manager:tasks`   | External requests | `manager-workers` | ✅ Active |
+| `{tenant}:manager:results` | Final results     | N/A (XREAD only)  | ✅ Active |
 
-#### âœ… Tier 2: Orchestrators
+#### ✅ Tier 2: Orchestrators
 
-| Orchestrator | Task Stream | Result Stream | Consumer Group | Status |
-|-------------|-------------|---------------|----------------|--------|
-| **Leads** | `{tenant}:leads:tasks` | `{tenant}:leads:results` | `leads-workers` | âœ… Active |
-| **Outreach** | `{tenant}:outreach:tasks` | `{tenant}:outreach:results` | `outreach-workers` | âœ… Active |
+| Orchestrator | Task Stream               | Result Stream               | Consumer Group     | Status    |
+| ------------ | ------------------------- | --------------------------- | ------------------ | --------- |
+| **Leads**    | `{tenant}:leads:tasks`    | `{tenant}:leads:results`    | `leads-workers`    | ✅ Active |
+| **Outreach** | `{tenant}:outreach:tasks` | `{tenant}:outreach:results` | `outreach-workers` | ✅ Active |
 
-#### âœ… Tier 3: Operational Agents
+#### ✅ Tier 3: Operational Agents
 
-| Agent | Task Stream | Result Stream | Consumer Group | Status |
-|-------|-------------|---------------|----------------|--------|
-| **RAG** | `{tenant}:rag:tasks` | `{tenant}:rag:results` | `rag-workers` | âœ… Active |
-| **Copywriter** | `{tenant}:copywriter:tasks` | `{tenant}:copywriter:results` | `copywriter-workers` | âœ… Active |
-| **Persistence** | `{tenant}:persistence:tasks` | `{tenant}:persistence:results` | `persistence-workers` | âœ… Active |
-| **Booking** | `{tenant}:booking:tasks` | `{tenant}:booking:results` | `booking-workers` | â³ Referenced |
-| **Sequencing** | `{tenant}:sequencing:tasks` | `{tenant}:sequencing:results` | `sequencing-workers` | â³ Referenced |
+| Agent           | Task Stream                  | Result Stream                  | Consumer Group        | Status        |
+| --------------- | ---------------------------- | ------------------------------ | --------------------- | ------------- |
+| **RAG**         | `{tenant}:rag:tasks`         | `{tenant}:rag:results`         | `rag-workers`         | ✅ Active     |
+| **Copywriter**  | `{tenant}:copywriter:tasks`  | `{tenant}:copywriter:results`  | `copywriter-workers`  | ✅ Active     |
+| **Persistence** | `{tenant}:persistence:tasks` | `{tenant}:persistence:results` | `persistence-workers` | ✅ Active     |
+| **Booking**     | `{tenant}:booking:tasks`     | `{tenant}:booking:results`     | `booking-workers`     | ⏳ Referenced |
+| **Sequencing**  | `{tenant}:sequencing:tasks`  | `{tenant}:sequencing:results`  | `sequencing-workers`  | ⏳ Referenced |
 
 ---
 
@@ -147,16 +152,19 @@ The system uses a three-tier architecture where each tier communicates via dedic
 **Pattern:** `{tenant_id}:{component}:{type}`
 
 **Components:**
+
 - `manager` - Manager Agent (Tier 1)
 - `leads`, `outreach` - Orchestrators (Tier 2)
 - `rag`, `copywriter`, `persistence`, `booking`, `sequencing`, `deduplication` - Agents (Tier 3)
 
 **Types:**
+
 - `tasks` - Incoming task stream (consumers read via XREADGROUP)
 - `results` - Result stream (consumers publish via XADD)
 - `dlq` - Dead Letter Queue for failed messages
 
 **Examples:**
+
 ```
 agentic-dev:manager:tasks
 agentic-dev:leads:tasks
@@ -172,19 +180,21 @@ Each stream uses consumer groups for parallel processing:
 
 ```
 Stream: agentic-dev:leads:tasks
-    â””â”€ Consumer Group: "leads-workers"
-        â”œâ”€ Worker 1 (PID 1234) - processes message A
-        â”œâ”€ Worker 2 (PID 1235) - processes message B
-        â””â”€ Worker 3 (PID 1236) - processes message C
+    └─ Consumer Group: "leads-workers"
+        ├─ Worker 1 (PID 1234) - processes message A
+        ├─ Worker 2 (PID 1235) - processes message B
+        └─ Worker 3 (PID 1236) - processes message C
 ```
 
 **Benefits:**
+
 - Multiple workers process tasks in parallel
 - Each message delivered to only ONE worker in group
 - Automatic load balancing by Redis
 - Failure recovery via pending entries list
 
 **Consumer Group Names:**
+
 - `manager-workers` - Manager consumers
 - `leads-workers` - Leads Orchestrator consumers
 - `outreach-workers` - Outreach Orchestrator consumers
@@ -256,12 +266,13 @@ Workers attempt `SET NX` before processing. If key exists, message is skipped.
 
 Failed messages are retried with exponential backoff:
 
-1. Message fails â†’ Increment retry counter
+1. Message fails → Increment retry counter
 2. If retries < `REDIS_MAX_RETRIES`, re-add to task stream
 3. Optional backoff: `REDIS_RETRY_BACKOFF_MS` milliseconds
-4. If max retries exceeded â†’ Send to DLQ (if `ENABLE_DLQ=1`)
+4. If max retries exceeded → Send to DLQ (if `ENABLE_DLQ=1`)
 
 **Configuration:**
+
 ```bash
 REDIS_MAX_RETRIES=2
 REDIS_RETRY_BACKOFF_MS=0
@@ -269,6 +280,7 @@ ENABLE_DLQ=1
 ```
 
 **DLQ Streams:**
+
 - `rag:dlq`, `persist:dlq`, `copy:dlq`
 
 ### Stream Trimming
@@ -289,7 +301,7 @@ XADD operations use `MAXLEN ~` for approximate trimming.
 
 ```bash
 # Connection
-REDIS_URL=redis://<REDACTED_REDIS_URL>
+REDIS_URL=redis://default:<REDIS_PASSWORD>@host:port/db
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_DB=0
@@ -354,7 +366,7 @@ python scripts/check_audit.py
 
 ```bash
 # Connect
-redis-cli -u "redis://<REDACTED_REDIS_URL>"
+redis-cli -u "redis://default:<REDIS_PASSWORD>@host:port"
 
 # Stream lengths
 XLEN agentic-dev:rag:tasks
@@ -392,6 +404,7 @@ TTL agentic-dev:ops:hb:rag:worker-1
 **Problem:** `ConnectionError: Error connecting to Redis`
 
 **Solutions:**
+
 1. Verify `REDIS_URL` in `.env` matches Redis Cloud instance
 2. Check firewall/network access
 3. Validate password authentication
@@ -407,6 +420,7 @@ python scripts/check_namespace.py
 **Problem:** Tasks enqueued but workers not processing
 
 **Solution:** Ensure all scripts load `.env` before importing:
+
 ```python
 from dotenv import load_dotenv
 load_dotenv()  # Call BEFORE importing config modules
@@ -417,6 +431,7 @@ load_dotenv()  # Call BEFORE importing config modules
 **Problem:** High pending count, workers active but not processing
 
 **Solutions:**
+
 ```bash
 # Identify stuck messages
 XPENDING agentic-dev:rag:tasks rag-workers
@@ -431,6 +446,7 @@ XACK agentic-dev:rag:tasks rag-workers <message-id>
 ### DLQ Growth
 
 **Investigation:**
+
 ```bash
 # Sample DLQ entries
 python scripts/check_rag_tasks.py
@@ -440,6 +456,7 @@ python scripts/check_audit.py
 ```
 
 **Common Causes:**
+
 - Invalid lead data (missing fields)
 - Database constraint violations
 - LLM API rate limits
@@ -521,16 +538,16 @@ for stream_name in streams:
 **Scenario:** "Create outreach campaign for 50 tech leads in San Francisco"
 
 ```
-1. External API â†’ manager:tasks
+1. External API → manager:tasks
 2. Manager delegates to leads:tasks + outreach:tasks
 3. Leads Orchestrator delegates to rag:tasks for enrichment
-4. RAG Agent processes â†’ rag:results
-5. Leads completes â†’ leads:results
+4. RAG Agent processes → rag:results
+5. Leads completes → leads:results
 6. Outreach Orchestrator delegates to copywriter:tasks, booking:tasks, sequencing:tasks
-7. Agents process â†’ copywriter:results, booking:results, sequencing:results
-8. Outreach completes â†’ outreach:results
-9. Manager aggregates â†’ manager:results
-10. External API polls manager:results â†’ Returns to client
+7. Agents process → copywriter:results, booking:results, sequencing:results
+8. Outreach completes → outreach:results
+9. Manager aggregates → manager:results
+10. External API polls manager:results → Returns to client
 ```
 
 ---
@@ -547,5 +564,3 @@ for stream_name in streams:
 **Last Updated:** November 9, 2025  
 **Redis Version:** 8.0.2  
 **Protocol:** Non-TLS (development), TLS recommended for production
-
-

@@ -18,12 +18,20 @@ def redis_client():
     redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
     client = redis.from_url(redis_url, decode_responses=True)
     client.ping()
-    
-    yield client
-    
-    # Cleanup
-    for key in client.scan_iter("test:*"):
-        client.delete(key)
+    try:
+        yield client
+    finally:
+        # Cleanup
+        for key in client.scan_iter("test:*"):
+            client.delete(key)
+        try:
+            client.close()
+        except Exception:
+            pass
+        try:
+            client.connection_pool.disconnect()
+        except Exception:
+            pass
 
 
 @pytest.mark.integration
@@ -44,6 +52,12 @@ class TestRAGWorkerLifecycle:
         task_stream = f"test:rag:tasks:{uuid.uuid4()}"
         result_stream = f"test:rag:results:{uuid.uuid4()}"
         
+        # Create consumer group before adding messages
+        try:
+            redis_client.xgroup_create(task_stream, "rag-workers", id="0", mkstream=True)
+        except redis.ResponseError:
+            pass
+		
         # Add task to stream
         task_data = {
             "envelope_id": "test-123",
@@ -54,12 +68,6 @@ class TestRAGWorkerLifecycle:
         }
         redis_client.xadd(task_stream, task_data)
         
-        # Create consumer group
-        try:
-            redis_client.xgroup_create(task_stream, "rag_workers", id="0", mkstream=True)
-        except redis.ResponseError:
-            pass
-        
         # Create worker (but don't start main loop)
         worker = RAGWorker(
             redis_url=os.environ.get('REDIS_URL', 'redis://localhost:6379'),
@@ -69,7 +77,7 @@ class TestRAGWorkerLifecycle:
         
         # Process one task manually
         messages = redis_client.xreadgroup(
-            "rag_workers", "test_worker",
+            "rag-workers", "test_worker",
             {task_stream: ">"},
             count=1,
             block=1000

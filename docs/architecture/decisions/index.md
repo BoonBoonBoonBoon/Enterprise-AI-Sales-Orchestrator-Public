@@ -20,6 +20,7 @@ An Architecture Decision Record is a short document that describes:
 | [ADR-004](004-supabase-rls-3-layer-auth.md)   | Supabase RLS 3-Layer Auth         | ✅ Accepted | Nov 2025 |
 | [ADR-005](005-agent-harness-pattern.md)       | Agent Harness Pattern             | ✅ Accepted | Nov 2025 |
 | [ADR-006](006-langgraph-deep-agents.md)       | LangGraph for Deep Agents         | ✅ Accepted | Dec 2025 |
+| [ADR-007](007-january-2026-summary.md)        | January 2026 Platform Summary     | ✅ Accepted | Jan 2026 |
 
 ## ADR Status Definitions
 

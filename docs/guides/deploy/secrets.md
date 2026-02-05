@@ -18,9 +18,9 @@ Secrets include:
 ```bash
 # .env (never commit!)
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_JWT_SECRET=your-jwt-secret-here
-OPENAI_API_KEY=sk-your-openai-api-key
+OPENAI_API_KEY=your-openai-api-key
 GMAIL_REFRESH_TOKEN=your-refresh-token
 ```
 
@@ -58,8 +58,8 @@ aws secretsmanager create-secret \
   --name agentic/production \
   --secret-string '{
     "SUPABASE_URL": "https://...",
-    "SUPABASE_ANON_KEY": "eyJ...",
-    "OPENAI_API_KEY": "sk-..."
+    "SUPABASE_ANON_KEY": "your-anon-key",
+    "OPENAI_API_KEY": "your-openai-api-key"
   }'
 ```
 

@@ -8,4 +8,4 @@ from tiers.tier_3.channel_sequencer_agent.channel_sequencer_agent import Channel
 
 def execute(payload: Dict[str, Any]) -> Dict[str, Any]:
     agent = ChannelSequencerAgent()
-    return agent.build_sequence(payload)
+    return agent.execute(payload)

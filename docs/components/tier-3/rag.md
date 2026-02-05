@@ -20,47 +20,48 @@ The RAG (Retrieval-Augmented Generation) Agent retrieves contextual information 
 
 ## Actions
 
+### `build_reply_context` (deterministic fast-path)
+
+Build reply-ready context for an inbound email thread.
+
+This is the preferred operation for inbound reply workflows because it returns a structured payload suitable for downstream reply generation (Copywriter).
+
+**Request (recommended):**
+
+```json
+{
+  "operation": "build_reply_context",
+  "task_id": "rag_ctx_<uuid>",
+  "email": "lead@example.com",
+  "lead_id": "optional-lead-uuid",
+  "thread_id": "optional-thread-id",
+  "subject": "optional-subject",
+  "max_messages": 200,
+  "include_lead_profile": true,
+  "include_all_threads": true
+}
+```
+
+**Response (shape):**
+
+```json
+{
+  "status": "found|no_conversations|not_found|error",
+  "task_id": "rag_ctx_<uuid>",
+  "lead": { "id": "...", "email": "..." },
+  "lead_source": "leads|staging_leads",
+  "conversation": { "conversation_id": "...", "recent_messages": [] },
+  "conversations": [{ "conversation_id": "..." }],
+  "messages": [{ "role": "lead", "content": "..." }],
+  "query_trace": { "operation": "build_reply_context", "error_count": 0 },
+  "match_reason": "email_exact|lead_id|...",
+  "error": null
+}
+```
+
 ### `get_lead_context`
 
-Retrieve comprehensive context for a lead.
-
-**Request:**
-
-```json
-{
-  "action": "get_lead_context",
-  "lead_id": "uuid-string",
-  "include_conversations": true,
-  "include_messages": true,
-  "max_messages": 10
-}
-```
-
-**Response (Success):**
-
-```json
-{
-  "status": "success",
-  "result": {
-    "lead": {
-      "id": "uuid-string",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "company": "Acme Inc",
-      "status": "qualified"
-    },
-    "conversations": [...],
-    "messages": [...],
-    "completeness_score": 0.85,
-    "lead_source": "leads",
-    "query_trace": {
-      "tables_queried": ["leads", "conversations", "messages"],
-      "steps": 3,
-      "error_count": 0
-    }
-  }
-}
-```
+Retrieve general lead context (lead + conversations + messages). Used for enrichment/lookup; reply flows should prefer `build_reply_context`.
 
 ### `search_similar`
 
@@ -113,12 +114,14 @@ Lead found → Query `conversations` → Query `messages`
 
 ### Environment Variables
 
-| Variable              | Default | Description            |
-| --------------------- | ------- | ---------------------- |
-| `SUPABASE_URL`        | —       | Database URL           |
-| `SUPABASE_ANON_KEY`   | —       | API key                |
-| `RAG_MAX_MESSAGES`    | `50`    | Max messages to return |
-| `RAG_INCLUDE_STAGING` | `true`  | Search staging tables  |
+| Variable               | Default | Description                               |
+| ---------------------- | ------- | ----------------------------------------- |
+| `SUPABASE_URL`         | —       | Database URL                              |
+| `SUPABASE_ANON_KEY`    | —       | API key                                   |
+| `SUPABASE_RAG_JWT`     | —       | Custom JWT for `agent_reader` (preferred) |
+| `SUPABASE_SERVICE_KEY` | —       | Service key fallback when JWT is invalid  |
+| `RAG_MAX_MESSAGES`     | `50`    | Max messages to return                    |
+| `RAG_INCLUDE_STAGING`  | `true`  | Search staging tables                     |
 
 ### Settings
 

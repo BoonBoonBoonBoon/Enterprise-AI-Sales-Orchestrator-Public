@@ -22,12 +22,20 @@ def redis_client():
     
     # Verify connection
     client.client.ping()
-    
-    yield client
-    
-    # Cleanup test streams
-    for key in client.client.scan_iter("test-t3:*"):
-        client.client.delete(key)
+    try:
+        yield client
+    finally:
+        # Cleanup test streams
+        for key in client.client.scan_iter("test-t3:*"):
+            client.client.delete(key)
+        try:
+            client.client.close()
+        except Exception:
+            pass
+        try:
+            client.client.connection_pool.disconnect()
+        except Exception:
+            pass
 
 
 def deserialize_message(msg_data: Dict[str, bytes]) -> Dict[str, Any]:

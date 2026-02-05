@@ -30,6 +30,7 @@ The **Manager Agent** is the Tier 1 Strategic AI in our Deep Agents architecture
 ### 1. Manager Agent Core (`agent/manager/manager_agent.py`)
 
 **Responsibilities:**
+
 - Goal analysis and decomposition
 - Shortcut detection for fast paths
 - Task delegation to specialist orchestrators
@@ -37,11 +38,13 @@ The **Manager Agent** is the Tier 1 Strategic AI in our Deep Agents architecture
 - Health monitoring
 
 **Key Methods:**
+
 - `execute(goal: str, context: dict) -> dict` - Main entry point
 - `get_task_result(task_id: str) -> dict` - Query delegated task status
 - `health_check() -> dict` - Component health status
 
 **Configuration:**
+
 - Model: GPT-4o (strategic reasoning)
 - Temperature: 0.0 (deterministic)
 - Tools: 5 delegation tools + LangChain agent
@@ -51,17 +54,20 @@ The **Manager Agent** is the Tier 1 Strategic AI in our Deep Agents architecture
 **Purpose:** Handle simple, repetitive tasks without LLM calls
 
 **Supported Shortcuts:**
+
 - **Arithmetic:** Calculations (2 + 2, (100 + 50) / 3, etc.)
 - **Date/Time:** Current time, today's date
 - **Health Checks:** Redis status, worker heartbeats
 - **Lead Lookups:** Redis cache queries (lead_123)
 
 **Performance:**
+
 - Target: <50ms latency
 - Achieved: Consistently <10ms for calculations
 - Cost: Zero (no LLM calls)
 
 **Detection Logic:**
+
 1. Keyword matching in goal text
 2. Arithmetic pattern extraction
 3. Safe AST evaluation (no eval())
@@ -71,6 +77,7 @@ The **Manager Agent** is the Tier 1 Strategic AI in our Deep Agents architecture
 **Class:** `DelegationTools`
 
 **Methods:**
+
 - `delegate_to_coding_orchestrator(task, requirements, priority)`
 - `delegate_to_data_orchestrator(query, dataset, filters, priority)`
 - `delegate_to_api_orchestrator(endpoint, operation, parameters, priority)`
@@ -78,11 +85,13 @@ The **Manager Agent** is the Tier 1 Strategic AI in our Deep Agents architecture
 - `check_task_status(task_id)`
 
 **Integration:**
+
 - Enqueues tasks to Redis Streams
 - Multi-tenant isolation with tenant prefix
 - Returns task_id for async tracking
 
 **Stream Names:**
+
 ```
 {tenant_id}:coding:tasks
 {tenant_id}:data:tasks
@@ -111,6 +120,7 @@ User Goal → Manager Agent
 ### Example Execution
 
 **Shortcut Path:**
+
 ```python
 manager = ManagerAgent(redis_client, tenant_id="demo")
 
@@ -124,6 +134,7 @@ result = manager.execute("What is 2 + 2?")
 ```
 
 **Delegation Path:**
+
 ```python
 result = manager.execute("Find leads in tech industry")
 # {
@@ -142,6 +153,7 @@ result = manager.execute("Find leads in tech industry")
 **18 tests, 100% passing:**
 
 **ShortcutRegistry (6 tests):**
+
 - ✅ Arithmetic detection
 - ✅ Simple calculation
 - ✅ Complex calculation with parentheses
@@ -150,6 +162,7 @@ result = manager.execute("Find leads in tech industry")
 - ✅ Invalid expression handling
 
 **DelegationTools (6 tests):**
+
 - ✅ Coding task delegation
 - ✅ Data query delegation
 - ✅ API request delegation
@@ -158,6 +171,7 @@ result = manager.execute("Find leads in tech industry")
 - ✅ Task status check (completed)
 
 **ManagerAgent (6 tests):**
+
 - ✅ Initialization
 - ✅ Shortcut execution
 - ✅ Agent delegation path
@@ -166,6 +180,7 @@ result = manager.execute("Find leads in tech industry")
 - ✅ Get task result
 
 **Integration (1 test):**
+
 - ⏭️ Full workflow (skipped - requires OPENAI_API_KEY)
 
 ### Running Tests
@@ -193,7 +208,8 @@ python -m examples.manager_shortcuts_demo
 ```
 
 **Output:**
-- Simple calculations (25 * 4 = 100)
+
+- Simple calculations (25 \* 4 = 100)
 - Complex calculations ((100 + 50) / 3 = 50.0)
 - Current time (ISO format)
 - Today's date
@@ -207,6 +223,7 @@ python -m examples.manager_demo
 ```
 
 **Demonstrates:**
+
 - Shortcut execution
 - Goal analysis
 - Task delegation to orchestrators
@@ -218,6 +235,7 @@ python -m examples.manager_demo
 ### 1. Redis Streams
 
 **Manager enqueues tasks:**
+
 ```python
 redis.xadd(
     f"{tenant_id}:coding:tasks",
@@ -230,6 +248,7 @@ redis.xadd(
 ```
 
 **Orchestrators consume tasks:**
+
 ```python
 # In orchestrator worker
 messages = redis.xreadgroup(
@@ -244,11 +263,13 @@ messages = redis.xreadgroup(
 ### 2. Multi-Tenant Isolation
 
 **Stream Naming:**
+
 - `{tenant_id}:coding:tasks` - Per-tenant streams
 - `{tenant_id}:task:status:{task_id}` - Task status keys
 - `{tenant_id}:task:result:{task_id}` - Task result cache
 
 **Context Propagation:**
+
 ```python
 task_data = {
     "task_id": task_id,
@@ -262,12 +283,14 @@ task_data = {
 ### 3. Observability
 
 **Execution Tracking:**
+
 - Unique `execution_id` per request
 - Latency measurement (ms)
 - Path tracking (shortcut vs delegation)
 - Agent step counting
 
 **Health Monitoring:**
+
 ```python
 health = manager.health_check()
 # {
@@ -286,22 +309,23 @@ health = manager.health_check()
 
 ### Shortcuts
 
-| Operation | Latency | Cost |
-|-----------|---------|------|
-| Arithmetic | <10ms | $0 |
-| Date/Time | <5ms | $0 |
-| Health Check | <20ms | $0 |
-| Lead Lookup | <15ms | $0 |
+| Operation    | Latency | Cost |
+| ------------ | ------- | ---- |
+| Arithmetic   | <10ms   | $0   |
+| Date/Time    | <5ms    | $0   |
+| Health Check | <20ms   | $0   |
+| Lead Lookup  | <15ms   | $0   |
 
 ### Delegation (with LangChain)
 
-| Operation | Latency | Cost (est) |
-|-----------|---------|------------|
-| Goal Analysis | 500-1500ms | ~$0.005 |
-| Tool Selection | 200-500ms | ~$0.002 |
-| Total | 700-2000ms | ~$0.007 |
+| Operation      | Latency    | Cost (est) |
+| -------------- | ---------- | ---------- |
+| Goal Analysis  | 500-1500ms | ~$0.005    |
+| Tool Selection | 200-500ms  | ~$0.002    |
+| Total          | 700-2000ms | ~$0.007    |
 
 **Optimization:**
+
 - Shortcuts reduce 90% of simple queries to <50ms
 - Zero-cost for calculations, time, health checks
 - Delegation only for complex tasks
@@ -312,7 +336,7 @@ health = manager.health_check()
 
 ```bash
 # Required for delegation
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=your-openai-api-key
 
 # Optional
 REDIS_HOST=localhost

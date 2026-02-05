@@ -18,6 +18,8 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any
 
+from redis.exceptions import RedisError
+
 from services.redis.client import RedisStreamsClient
 from services.redis.stream_registry import StreamRegistry, Tier, StreamType
 
@@ -29,13 +31,25 @@ def redis_pubsub():
     client = RedisStreamsClient(url=redis_url, namespace="test")
     
     # Verify connection
-    client.client.ping()
+    try:
+        client.client.ping()
+    except RedisError as exc:
+        pytest.skip(f"Redis unavailable for integration tests: {exc}")
     
-    yield client
-    
-    # Cleanup test streams
-    for key in client.client.scan_iter("test:*"):
-        client.client.delete(key)
+    try:
+        yield client
+    finally:
+        # Cleanup test streams
+        for key in client.client.scan_iter("test:*"):
+            client.client.delete(key)
+        try:
+            client.client.close()
+        except Exception:
+            pass
+        try:
+            client.client.connection_pool.disconnect()
+        except Exception:
+            pass
 
 
 @pytest.fixture
@@ -68,8 +82,9 @@ class TestRedisCRUDVerification:
     def test_crud_rag_agent_stream(self, redis_pubsub):
         """Test CRUD operations on RAG agent task/result streams."""
         tenant_id = "test-tenant"
-        task_stream = f"{tenant_id}:agents:rag:tasks"
-        result_stream = f"{tenant_id}:agents:rag:results"
+        stream_suffix = str(uuid.uuid4())
+        task_stream = f"test:{tenant_id}:{stream_suffix}:agents:rag:tasks"
+        result_stream = f"test:{tenant_id}:{stream_suffix}:agents:rag:results"
         consumer_group = "rag-workers"
         consumer_name = "test-rag-consumer"
         
@@ -120,8 +135,9 @@ class TestRedisCRUDVerification:
     def test_crud_persistence_agent_stream(self, redis_pubsub):
         """Test CRUD operations on Persistence agent streams."""
         tenant_id = "test-tenant"
-        task_stream = f"{tenant_id}:agents:persistence:tasks"
-        result_stream = f"{tenant_id}:agents:persistence:results"
+        stream_suffix = str(uuid.uuid4())
+        task_stream = f"test:{tenant_id}:{stream_suffix}:agents:persistence:tasks"
+        result_stream = f"test:{tenant_id}:{stream_suffix}:agents:persistence:results"
         consumer_group = "persistence-workers"
         consumer_name = "test-persistence-consumer"
         
@@ -163,8 +179,9 @@ class TestRedisCRUDVerification:
     def test_crud_copywriter_agent_stream(self, redis_pubsub):
         """Test CRUD operations on Copywriter agent streams."""
         tenant_id = "test-tenant"
-        task_stream = f"{tenant_id}:agents:copywriter:tasks"
-        result_stream = f"{tenant_id}:agents:copywriter:results"
+        stream_suffix = str(uuid.uuid4())
+        task_stream = f"test:{tenant_id}:{stream_suffix}:agents:copywriter:tasks"
+        result_stream = f"test:{tenant_id}:{stream_suffix}:agents:copywriter:results"
         consumer_group = "copywriter-workers"
         consumer_name = "test-copywriter-consumer"
         
@@ -195,8 +212,9 @@ class TestRedisCRUDVerification:
     def test_multi_stream_xread(self, redis_pubsub):
         """Test XREAD across multiple streams simultaneously."""
         tenant_id = "test-tenant"
-        rag_stream = f"{tenant_id}:agents:rag:results"
-        persistence_stream = f"{tenant_id}:agents:persistence:results"
+        stream_suffix = str(uuid.uuid4())
+        rag_stream = f"test:{tenant_id}:{stream_suffix}:agents:rag:results"
+        persistence_stream = f"test:{tenant_id}:{stream_suffix}:agents:persistence:results"
         
         # Add messages to both streams
         rag_msg = generate_test_message("rag_result")
@@ -220,7 +238,8 @@ class TestRedisCRUDVerification:
     def test_stream_maxlen_trimming(self, redis_pubsub):
         """Test MAXLEN trimming keeps streams bounded."""
         tenant_id = "test-tenant"
-        stream = f"{tenant_id}:agents:test:tasks"
+        stream_suffix = str(uuid.uuid4())
+        stream = f"test:{tenant_id}:{stream_suffix}:agents:test:tasks"
         maxlen = 10
         
         # Add 15 messages with MAXLEN=10
@@ -235,7 +254,8 @@ class TestRedisCRUDVerification:
     def test_consumer_group_multiple_consumers(self, redis_pubsub):
         """Test multiple consumers in same group don't read duplicate messages."""
         tenant_id = "test-tenant"
-        stream = f"{tenant_id}:agents:test:tasks"
+        stream_suffix = str(uuid.uuid4())
+        stream = f"test:{tenant_id}:{stream_suffix}:agents:test:tasks"
         group = "test-group"
         consumer1 = "consumer-1"
         consumer2 = "consumer-2"
@@ -262,13 +282,15 @@ class TestRedisCRUDVerification:
     def test_xpending_detailed(self, redis_pubsub):
         """Test XPENDING returns detailed pending message info."""
         tenant_id = "test-tenant"
-        stream = f"{tenant_id}:agents:test:tasks"
+        stream_suffix = str(uuid.uuid4())
+        stream = f"test:{tenant_id}:{stream_suffix}:agents:test:tasks"
         group = "test-group"
         consumer = "test-consumer"
         
+        # Create consumer group before adding messages to read with ">"
+        redis_pubsub.create_consumer_group(stream, group, mkstream=True)
         # Add message
         redis_pubsub.xadd(stream, generate_test_message("test"))
-        redis_pubsub.create_consumer_group(stream, group, mkstream=True)
         
         # Read but don't ACK
         msgs = redis_pubsub.xreadgroup(group, consumer, {stream: ">"}, count=1)
@@ -308,7 +330,8 @@ class TestRedisCRUDVerification:
     def test_backpressure_detection(self, redis_pubsub):
         """Test ability to detect when streams are full (backpressure)."""
         tenant_id = "test-tenant"
-        stream = f"{tenant_id}:agents:test:tasks"
+        stream_suffix = str(uuid.uuid4())
+        stream = f"test:{tenant_id}:{stream_suffix}:agents:test:tasks"
         threshold = 100
         
         # Fill stream

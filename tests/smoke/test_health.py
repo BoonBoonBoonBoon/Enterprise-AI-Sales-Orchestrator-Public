@@ -13,7 +13,7 @@ import redis
 def test_redis_connectivity():
     """Test Redis is reachable and responding."""
     redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
-    
+    client = None
     try:
         client = redis.from_url(redis_url, socket_connect_timeout=5)
         result = client.ping()
@@ -21,6 +21,16 @@ def test_redis_connectivity():
         print(f"✅ Redis connected: {redis_url}")
     except redis.ConnectionError as e:
         pytest.fail(f"❌ Redis connection failed: {e}")
+    finally:
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+            try:
+                client.connection_pool.disconnect()
+            except Exception:
+                pass
 
 
 @pytest.mark.smoke
@@ -34,12 +44,21 @@ def test_redis_streams_available():
     try:
         message_id = client.xadd(test_stream, {"test": "data"})
         assert message_id is not None
-        
+		
         # Cleanup
         client.delete(test_stream)
         print("✅ Redis streams available")
     except Exception as e:
         pytest.fail(f"❌ Redis streams not available: {e}")
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+        try:
+            client.connection_pool.disconnect()
+        except Exception:
+            pass
 
 
 @pytest.mark.smoke
@@ -103,16 +122,25 @@ def test_redis_memory_available():
     """Test Redis has sufficient memory available."""
     redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
     client = redis.from_url(redis_url)
-    
-    info = client.info('memory')
-    used_memory_mb = info['used_memory'] / (1024 * 1024)
-    max_memory = info.get('maxmemory', 0)
-    
-    print(f"✅ Redis memory: {used_memory_mb:.2f} MB used")
-    
-    # Warn if using more than 1GB
-    if used_memory_mb > 1024:
-        print(f"⚠️  Redis using {used_memory_mb:.2f} MB (>1GB)")
+    try:
+        info = client.info('memory')
+        used_memory_mb = info['used_memory'] / (1024 * 1024)
+        max_memory = info.get('maxmemory', 0)
+		
+        print(f"✅ Redis memory: {used_memory_mb:.2f} MB used")
+		
+        # Warn if using more than 1GB
+        if used_memory_mb > 1024:
+            print(f"⚠️  Redis using {used_memory_mb:.2f} MB (>1GB)")
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+        try:
+            client.connection_pool.disconnect()
+        except Exception:
+            pass
 
 
 @pytest.mark.smoke

@@ -9,6 +9,9 @@ __pycache__/
 node_modules/
 package-lock.json
 
+# Next.js build output
+.next/
+
 # MkDocs build output
 site/
 
@@ -24,6 +27,10 @@ htmlcov/
 # Local audit/backup artifacts (may contain sensitive data)
 artifacts/
 
+# Local secrets (keep secrets/README.md tracked)
+secrets/*
+!secrets/README.md
+
 # Benchmark/health temp markers
 scripts/.last_write_task_id
 
@@ -37,3 +44,8 @@ supabase/.temp/
 *.swp
 *.swo
 .idea/
+
+# Local logs / devserver artifacts
+*.log
+*.tsbuildinfo
+

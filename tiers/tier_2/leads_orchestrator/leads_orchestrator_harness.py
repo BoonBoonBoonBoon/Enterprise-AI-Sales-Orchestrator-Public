@@ -82,7 +82,7 @@ class LeadsOrchestratorHarness:
             enable_checkpointing=False,  # Fast ops don't need checkpointing
             requests_per_hour=1000,
             quota_backend="memory",
-            observability_backend="datadog" if enable_observability else "simple",
+            observability_backend="grafana" if enable_observability else "simple",
             service_name="agentic-system",
         )
         

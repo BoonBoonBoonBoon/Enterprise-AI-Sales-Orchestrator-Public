@@ -3,11 +3,13 @@
 Responsibilities:
 - Accept a free-text request or an envelope.
 - Coordinate operational agents (RAGAgent, PersistenceAgent) to perform multi-step flows.
-- Return a canonical envelope: {'metadata': {...}, 'records': [...]}
+- Return a canonical typed envelope (core.envelope.Envelope).
 """
 from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 import uuid
+
+from core.envelope.typed_envelope import Envelope as TypedEnvelope, normalize_envelope
 
 
 class BaseOrchestrator:
@@ -25,19 +27,16 @@ class BaseOrchestrator:
         return f"{prefix}-{ts}-{uuid.uuid4().hex[:8]}"
 
     def validate_envelope(self, env: Any) -> bool:
-        """Minimal envelope shape validator.
+        """Validate envelope by normalizing into typed Envelope."""
+        try:
+            normalize_envelope(env, default_source="orchestrator")
+            return True
+        except Exception:
+            return False
 
-        Accepts dicts with 'metadata' (dict) and 'records' (list).
-        """
-        if not isinstance(env, dict):
-            return False
-        if 'metadata' not in env or 'records' not in env:
-            return False
-        if not isinstance(env['metadata'], dict):
-            return False
-        if not isinstance(env['records'], list):
-            return False
-        return True
+    def standardize_envelope(self, env: Any, *, default_source: str = "orchestrator") -> TypedEnvelope:
+        """Normalize legacy or typed envelopes into the canonical typed envelope."""
+        return normalize_envelope(env, default_source=default_source)
 
     def get_agent(self, name: str) -> Optional[Any]:
         """Return a registered agent/tool by name or None."""

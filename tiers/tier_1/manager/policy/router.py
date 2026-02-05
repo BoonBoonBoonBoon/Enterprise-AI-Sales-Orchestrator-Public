@@ -25,6 +25,8 @@ DEFAULT_INTENT_TO_ORCH = {
     # and then chained by Manager to Outbound for Copywriter.
     "inbound": ["leads"],
     "control": ["control"],
+    # Lead qualification: evaluate staging leads for promotion to leads table
+    "qualify_lead": ["leads"],
 }
 
 

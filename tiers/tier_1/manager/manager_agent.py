@@ -104,7 +104,7 @@ class ManagerAgent:
         
         # Start metrics server (only once per process)
         try:
-            start_metrics_server()
+            start_metrics_server(component="manager")
             logger.info("Metrics server started on port 8000")
         except Exception as e:
             logger.debug(f"Metrics server already running or failed to start: {e}")
@@ -501,6 +501,7 @@ class ManagerAgent:
                     task_id=task_id,
                     payload=payload,
                     destination=destination,
+                    correlation_id=corr_id,
                     tenant_id=self.tenant_id,
                     intent=intent,
                     debug=({"llm_summary": llm_debug_summary} if llm_debug_summary else None),
@@ -547,6 +548,14 @@ class ManagerAgent:
                     self._chain_leads_to_outbound(enqueued, decision, start_time, correlation_id=corr_id)
             except Exception as chain_exc:
                 logger.warning(f"Chaining leads→outbound failed: {chain_exc}")
+
+            # Optional chaining: for inbound classification flows, wait for InboundOrchestrator
+            # to recommend the next orchestrator (Manager mediates to enforce vertical-only).
+            try:
+                if has_email_event and "inbound" in decision.orchestrators:
+                    self._chain_inbound_to_next(enqueued, decision, req, correlation_id=corr_id)
+            except Exception as chain_exc:
+                logger.warning(f"Chaining inbound→next failed: {chain_exc}")
 
             elapsed = (datetime.now() - start_time).total_seconds() * 1000
             
@@ -795,6 +804,7 @@ class ManagerAgent:
                 },
             },
             destination="outbound",
+            correlation_id=corr,
             tenant_id=self.tenant_id,
             intent=decision.intent,
         )
@@ -817,6 +827,139 @@ class ManagerAgent:
             )
         except Exception as e:
             logger.error(f"Failed to enqueue chained outbound task: {e}")
+
+    def _chain_inbound_to_next(
+        self,
+        enqueued: List[Dict[str, Any]],
+        decision: ManagerDecision,
+        req: "UnifiedManagerRequest",
+        correlation_id: Optional[str] = None,
+    ) -> None:
+        """Best-effort chaining: wait for inbound orchestrator result, then enqueue next orchestrator.
+
+        Inbound routing is mediated by Manager to enforce vertical-only comms.
+        """
+
+        corr = correlation_id or getattr(decision, "correlation_id", None) or getattr(decision, "task_id", None)
+        inbound_task_ids = [e.get("task_id") for e in enqueued if ":orchestrators:inbound:" in e.get("stream", "")]
+        if not inbound_task_ids:
+            return
+
+        timeout_ms = int(os.getenv("MANAGER_CHAIN_INBOUND_TIMEOUT_MS", "30000"))
+        result_stream = f"{self.tenant_id}:orchestrators:inbound:results"
+        deadline = time.time() + max(1, timeout_ms / 1000)
+        inbound_payload: Optional[Dict[str, Any]] = None
+
+        while time.time() < deadline:
+            try:
+                entries = self.redis.xrevrange(result_stream, max="+", min="-", count=50)
+                for _msg_id, fields in entries:
+                    env = from_redis_message(fields)
+                    if env.metadata.task_id in inbound_task_ids:
+                        inbound_payload = env.payload or {}
+                        break
+                if inbound_payload is not None:
+                    break
+            except Exception:
+                pass
+            time.sleep(0.2)
+
+        if not inbound_payload:
+            _trace_log(
+                "manager",
+                correlation_id=corr or "unknown",
+                task_id=";".join([t for t in inbound_task_ids if t]),
+                step="timeout",
+                detail="chain_inbound_no_result",
+                result_stream=result_stream,
+            )
+            return
+
+        # Inbound orchestrator returns { routing: { action: "delegate", delegate: {...} } }
+        routing = inbound_payload.get("routing") if isinstance(inbound_payload, dict) else None
+        delegate = routing.get("delegate") if isinstance(routing, dict) else None
+        if not isinstance(delegate, dict):
+            _trace_log(
+                "manager",
+                correlation_id=corr or "unknown",
+                task_id=";".join([t for t in inbound_task_ids if t]),
+                step="skipped",
+                detail="chain_inbound_no_delegate",
+                routing_action=routing.get("action") if isinstance(routing, dict) else None,
+            )
+            return
+
+        orch = str(delegate.get("orchestrator") or "").strip().lower()
+        if orch != "leads":
+            _trace_log(
+                "manager",
+                correlation_id=corr or "unknown",
+                task_id=";".join([t for t in inbound_task_ids if t]),
+                step="skipped",
+                detail="chain_inbound_not_leads",
+                target_orchestrator=orch,
+            )
+            return
+
+        # Build a Manager->Leads task preserving original request metadata,
+        # but allowing inbound orchestrator to override goal/context.
+        delegate_goal = delegate.get("goal") or (req.subject or "") or "process inbound email"
+        delegate_intent = str(delegate.get("intent") or decision.intent or "inbound")
+        delegate_ctx = delegate.get("context") if isinstance(delegate.get("context"), dict) else {}
+
+        payload: Dict[str, Any] = {
+            "tenant_id": req.tenant_id,
+            "source": req.source,
+            "intent": delegate_intent,
+            "subject": req.subject,
+            "text": req.text,
+            "payload": req.payload or {},
+        }
+
+        # Merge/override context for downstream processing.
+        if isinstance(payload.get("payload"), dict):
+            ctx = payload["payload"].get("context") if isinstance(payload["payload"].get("context"), dict) else {}
+            ctx.update(delegate_ctx)
+            payload["payload"]["context"] = ctx
+
+        # Also provide top-level context so LeadsOrchestrator can extract email_event.
+        payload["context"] = delegate_ctx
+
+        outbound_stream = f"{self.tenant_id}:orchestrators:leads:tasks"
+        task_id = f"task_{uuid.uuid4()}"
+        envelope = create_task_envelope(
+            source="manager_agent",
+            task_id=task_id,
+            payload={
+                **payload,
+                "goal": delegate_goal,
+                "context_depth": decision.context_depth,
+            },
+            destination="leads",
+            correlation_id=corr,
+            tenant_id=self.tenant_id,
+            intent=delegate_intent,
+        )
+
+        try:
+            stream_id = self.redis.xadd(outbound_stream, to_redis_fields(envelope))
+            enqueued.append({
+                "stream": outbound_stream,
+                "id": stream_id.decode() if isinstance(stream_id, bytes) else stream_id,
+                "task_id": task_id,
+                "chained_from": inbound_task_ids,
+            })
+            _trace_log(
+                "manager",
+                correlation_id=corr or "unknown",
+                task_id=task_id,
+                step="delegated",
+                detail="manager_chain_inbound_to_leads",
+                stream=outbound_stream,
+                chained_from=inbound_task_ids,
+            )
+        except Exception as e:
+            logger.error(f"Failed to enqueue chained leads task: {e}")
 
 
 # Example usage

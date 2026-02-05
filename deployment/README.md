@@ -1,4 +1,4 @@
-﻿# Deployment Guide
+# Deployment Guide
 
 This directory contains Docker and deployment configuration for the Agentic System with the new three-tier + services architecture.
 
@@ -6,11 +6,11 @@ This directory contains Docker and deployment configuration for the Agentic Syst
 
 ```
 deployment/
-â”œâ”€â”€ docker/
-â”‚   â””â”€â”€ Dockerfile.worker          # Multi-stage build for all worker types
-â”œâ”€â”€ docker-compose.yml              # Orchestration for local/dev/prod
-â”œâ”€â”€ .env.example                    # Environment variables template
-â””â”€â”€ README.md                        # This file
+├── docker/
+│   └── Dockerfile.worker          # Multi-stage build for all worker types
+├── docker-compose.yml              # Orchestration for local/dev/prod
+├── .env.example                    # Environment variables template
+└── README.md                        # This file
 ```
 
 ## Quick Start (Local Development)
@@ -39,9 +39,9 @@ deployment/
 
    ```bash
    # Required
-   OPENAI_API_KEY=sk-...
+   OPENAI_API_KEY=your-openai-api-key
    SUPABASE_URL=https://...supabase.co
-   SUPABASE_KEY=<SUPABASE_JWT>
+   SUPABASE_ANON_KEY=your-anon-key
 
    # Optional (for production or advanced features)
    VECTOR_DB_BACKEND=pinecone
@@ -79,8 +79,8 @@ The deployment is organized into three tiers + services:
 - **Containers:** `leads_orchestrator`, `outreach_orchestrator`
 - **Role:** Coordinate domain-specific workflows
 - **Modules:**
-  - `tiers.tier_2.leads_orchestrator.consumer` (lead discovery â†’ qualification)
-  - `tiers.tier_2.outreach_orchestrator.consumer` (copy â†’ scheduling â†’ tracking)
+  - `tiers.tier_2.leads_orchestrator.consumer` (lead discovery → qualification)
+  - `tiers.tier_2.outreach_orchestrator.consumer` (copy → scheduling → tracking)
 - **Responsibilities:** Delegate to tier_3 agents, manage workflow state
 
 ### Tier 3: Agents (Operational)
@@ -140,7 +140,7 @@ docker compose up -d --scale copywriter_agent=2
 # Stop all
 docker compose down
 
-# Stop and remove volumes (âš ï¸ deletes data)
+# Stop and remove volumes (⚠️ deletes data)
 docker compose down -v
 ```
 
@@ -164,7 +164,7 @@ Key variables for each deployment scenario:
 ### Local Development
 
 ```env
-REDIS_URL=redis://<REDACTED_REDIS_URL>      # Local compose Redis
+REDIS_URL=redis://redis:6379/0      # Local compose Redis
 SUPABASE_URL=                         # Leave empty or use dev Supabase
 VECTOR_DB_BACKEND=in-memory          # Fast, no external dependency
 ```
@@ -172,7 +172,7 @@ VECTOR_DB_BACKEND=in-memory          # Fast, no external dependency
 ### Staging (Cloud Services)
 
 ```env
-REDIS_URL=redis://<REDACTED_REDIS_URL>   # Redis Cloud
+REDIS_URL=redis://cloud-redis:6379   # Redis Cloud
 SUPABASE_URL=https://...supabase.co  # Supabase staging project
 VECTOR_DB_BACKEND=pinecone           # Pinecone staging space
 OTEL_ENABLED=1                        # Enable tracing
@@ -181,7 +181,7 @@ OTEL_ENABLED=1                        # Enable tracing
 ### Production (High Availability)
 
 ```env
-REDIS_URL=redis://<REDACTED_REDIS_URL>    # Managed Redis with TLS
+REDIS_URL=redis://prod-redis:6379    # Managed Redis with TLS
 SUPABASE_URL=https://...supabase.co  # Supabase production project
 VECTOR_DB_BACKEND=pinecone           # Pinecone production space
 OTEL_ENABLED=1                        # Enable observability
@@ -239,7 +239,7 @@ On Windows (host machine):
 Resolve-DnsName <your-project-ref>.supabase.co
 ```
 
-If that fails (NXDOMAIN), your `SUPABASE_URL` is wrong (or the project was deleted). Copy the correct URL from **Supabase Dashboard â†’ Settings â†’ API** and restart the stack:
+If that fails (NXDOMAIN), your `SUPABASE_URL` is wrong (or the project was deleted). Copy the correct URL from **Supabase Dashboard → Settings → API** and restart the stack:
 
 ```bash
 docker compose -f deployment/docker-compose.yml up -d

@@ -1,7 +1,22 @@
-# Kubernetes Secrets Management Configuration
-#
-# This directory contains Kubernetes manifests for deploying the agentic system
-# with secrets management integration (Azure Key Vault or AWS Secrets Manager)
+# Kubernetes Deployment
+
+This directory contains Kubernetes manifests for deploying the Agentic System.
+
+> **📦 Recommended: Use the Helm Chart**
+>
+> For production deployments, use the Helm chart at [`charts/agentic-system/`](../charts/agentic-system/).
+> It includes all workers, API gateway, portal, ingress, HPA, and secrets management.
+>
+> ```bash
+> helm upgrade --install agentic ../charts/agentic-system \
+>   --namespace agentic-system \
+>   --create-namespace
+> ```
+
+## Secrets Management Configuration
+
+This directory contains Kubernetes manifests for deploying the agentic system
+with secrets management integration (Azure Key Vault or AWS Secrets Manager).
 
 ## Directory Structure
 
@@ -17,7 +32,14 @@ k8s/
 └── base/
     ├── namespace.yaml                  # Namespace definition
     ├── configmap.yaml                  # Non-secret configuration
-    └── service.yaml                    # Service definitions
+    ├── service.yaml                    # Service definitions
+    ├── services-public.yaml            # Public services (API, Portal)
+    ├── deployments-workers.yaml        # All worker deployments
+    ├── deployment-api-gateway.yaml     # API gateway
+    ├── deployment-portal.yaml          # Portal (Next.js)
+    ├── deployment-health-server.yaml   # Health server
+    ├── ingress.yaml                    # Ingress with TLS
+    └── hpa.yaml                        # Horizontal Pod Autoscalers
 ```
 
 ---
@@ -27,12 +49,14 @@ k8s/
 ### For Azure Key Vault
 
 1. **Install CSI Driver:**
+
 ```bash
 helm repo add csi-secrets-store-provider-azure https://azure.github.io/secrets-store-csi-driver-provider-azure/charts
 helm install csi-secrets-store-provider-azure/csi-secrets-store-provider-azure --generate-name
 ```
 
 2. **Enable Workload Identity (Recommended):**
+
 ```bash
 az aks update \
   --resource-group agentic-rg \
@@ -42,6 +66,7 @@ az aks update \
 ```
 
 3. **Create Managed Identity:**
+
 ```bash
 az identity create \
   --name agentic-workload-identity \
@@ -52,6 +77,7 @@ CLIENT_ID=$(az identity show --name agentic-workload-identity --resource-group a
 ```
 
 4. **Grant Key Vault Access:**
+
 ```bash
 az keyvault set-policy \
   --name agentic-system-prod \
@@ -62,6 +88,7 @@ az keyvault set-policy \
 ### For AWS Secrets Manager
 
 1. **Install CSI Driver:**
+
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/secrets-store-csi-driver/main/deploy/rbac-secretproviderclass.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/secrets-store-csi-driver/main/deploy/csidriver.yaml
@@ -73,6 +100,7 @@ kubectl apply -f https://raw.githubusercontent.com/aws/secrets-store-csi-driver-
 ```
 
 2. **Create IAM Role (IRSA):**
+
 ```bash
 eksctl create iamserviceaccount \
   --name agentic-worker \
@@ -83,6 +111,7 @@ eksctl create iamserviceaccount \
 ```
 
 3. **IAM Policy:**
+
 ```json
 {
   "Version": "2012-10-17",
@@ -155,6 +184,7 @@ kubectl logs $POD -n agentic-system | grep SecretsManager
 ```
 
 Expected output:
+
 ```
 [SecretsManager] Initializing with provider: azure
 [SecretsManager] Azure Key Vault initialized: agentic-system-prod
@@ -178,11 +208,13 @@ curl http://localhost:8080/health/secrets
 ### Azure: "Failed to get secret"
 
 **Check identity:**
+
 ```bash
 kubectl describe pod <pod-name> -n agentic-system | grep azure.workload.identity
 ```
 
 **Check Key Vault access:**
+
 ```bash
 az keyvault secret show --vault-name agentic-system-prod --name OPENAI-API-KEY
 ```
@@ -190,11 +222,13 @@ az keyvault secret show --vault-name agentic-system-prod --name OPENAI-API-KEY
 ### AWS: "Permission denied"
 
 **Check service account:**
+
 ```bash
 kubectl describe serviceaccount agentic-worker -n agentic-system
 ```
 
 **Check IAM role:**
+
 ```bash
 aws sts assume-role --role-arn arn:aws:iam::ACCOUNT_ID:role/agentic-worker-role --role-session-name test
 ```
@@ -202,12 +236,14 @@ aws sts assume-role --role-arn arn:aws:iam::ACCOUNT_ID:role/agentic-worker-role 
 ### Secrets not loading
 
 **Check CSI driver:**
+
 ```bash
 kubectl get csidriver
 kubectl logs -n kube-system -l app=secrets-store-csi-driver
 ```
 
 **Check provider:**
+
 ```bash
 # Azure
 kubectl logs -n kube-system -l app=csi-secrets-store-provider-azure
@@ -258,6 +294,9 @@ kubectl logs -n kube-system -l app=csi-secrets-store-provider-aws
 
 ## Related Documentation
 
-- [Secrets Management Guide](../docs/SECRETS_MANAGEMENT.md)
+- [Secrets Management Guide](../docs/guides/deploy/secrets.md)
+- [Kubernetes Deployment Guide](../docs/guides/deploy/kubernetes.md)
+- [Helm Chart Guide](../docs/guides/deploy/helm.md)
+- [Infrastructure Overview](../docs/guides/deploy/infrastructure.md)
 - [Azure Key Vault CSI Driver](https://azure.github.io/secrets-store-csi-driver-provider-azure/)
 - [AWS Secrets Manager CSI Driver](https://github.com/aws/secrets-store-csi-driver-provider-aws)

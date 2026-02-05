@@ -26,17 +26,15 @@ def route_intent(intent: str, tenant_id: str) -> str:
     """
     routes = {
         # Lead-related intents → Leads Orchestrator
-        "inbound_inquiry": f"{tenant_id}:orchestrators:leads:tasks",
-        "enrich_lead": f"{tenant_id}:orchestrators:leads:tasks",
+        "inbound": f"{tenant_id}:orchestrators:leads:tasks",
+        "lead_enrichment": f"{tenant_id}:orchestrators:leads:tasks",
         "qualify_lead": f"{tenant_id}:orchestrators:leads:tasks",
 
-        # Outreach intents → Outreach Orchestrator
-        "campaign_start": f"{tenant_id}:orchestrators:outbound:tasks",
-        "draft_reply": f"{tenant_id}:orchestrators:outbound:tasks",
-        "send_followup": f"{tenant_id}:orchestrators:outbound:tasks",
+        # Campaign bootstrap can involve multiple orchestrators
+        "start_campaign": f"{tenant_id}:orchestrators:control:tasks",
 
-        # Inbound handling
-        "process_inbound": f"{tenant_id}:orchestrators:inbound:tasks",
+        # Outbound intent → Outreach Orchestrator
+        "outbound": f"{tenant_id}:orchestrators:outbound:tasks",
     }
 
     return routes.get(intent)
@@ -44,24 +42,24 @@ def route_intent(intent: str, tenant_id: str) -> str:
 
 ## Intent → Orchestrator Mapping
 
-| Intent            | Target Orchestrator | Stream Suffix                  |
-| ----------------- | ------------------- | ------------------------------ |
-| `inbound_inquiry` | Leads               | `orchestrators:leads:tasks`    |
-| `enrich_lead`     | Leads               | `orchestrators:leads:tasks`    |
-| `qualify_lead`    | Leads               | `orchestrators:leads:tasks`    |
-| `campaign_start`  | Outreach            | `orchestrators:outbound:tasks` |
-| `draft_reply`     | Outreach            | `orchestrators:outbound:tasks` |
-| `send_followup`   | Outreach            | `orchestrators:outbound:tasks` |
-| `process_inbound` | Inbound             | `orchestrators:inbound:tasks`  |
+| Intent            | Typical Target Orchestrator | Stream Suffix                  |
+| ----------------- | --------------------------- | ------------------------------ |
+| `inbound`         | Leads                       | `orchestrators:leads:tasks`    |
+| `lead_enrichment` | Leads                       | `orchestrators:leads:tasks`    |
+| `qualify_lead`    | Leads                       | `orchestrators:leads:tasks`    |
+| `start_campaign`  | Control                     | `orchestrators:control:tasks`  |
+| `outbound`        | Outreach                    | `orchestrators:outbound:tasks` |
 
 ## Usage
 
 ```python
-from tiers.tier_1.manager.policy.router import route_intent
+from tiers.tier_1.manager.policy.router import stream_for, get_routing_map
 
 # In Manager
 intent = self.classify_intent(event)
-target_stream = route_intent(intent, self.tenant_id)
+routes = get_routing_map(self.tenant_id)
+target_orchestrators = routes.get(intent, [])
+target_stream = stream_for(self.tenant_id, target_orchestrators[0]) if target_orchestrators else None
 
 if target_stream:
     self.redis.xadd(target_stream, {"data": json.dumps(task)})
@@ -71,9 +69,10 @@ else:
 
 ## Adding New Routes
 
-1. Define the intent in `intent.py`
-2. Add mapping in `router.py`
-3. Ensure orchestrator exists and is running
+Routes are configured via YAML (with safe defaults):
+
+1. Add/update mapping in `config/manager/routing.yaml` (or `config/tenants/{tenant_id}/manager_routing.yaml`)
+2. Ensure orchestrator exists and is running
 
 ```python
 # Add to routes dict

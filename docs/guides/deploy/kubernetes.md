@@ -1,4 +1,4 @@
-﻿# Kubernetes Deployment
+# Kubernetes Deployment
 
 This guide covers deploying the Agentic System to Kubernetes.
 
@@ -9,34 +9,163 @@ This guide covers deploying the Agentic System to Kubernetes.
 - Helm 3.x
 - Container registry access
 
+## Deployment Options
+
+| Method         | Best For                       | Complexity |
+| -------------- | ------------------------------ | ---------- |
+| **Helm Chart** | Production, repeatable deploys | Low        |
+| **Raw YAML**   | Learning, customization        | Medium     |
+| **Kustomize**  | Environment overlays           | Medium     |
+
+!!! tip "Recommended: Use Helm"
+The Helm chart at `charts/agentic-system/` is the recommended way to deploy. It includes all components with sensible defaults and easy customization via `values.yaml`.
+
+## Quick Start with Helm
+
+### 1. Configure Values
+
+Edit `charts/agentic-system/values.yaml`:
+
+```yaml
+# Image configuration
+images:
+  worker: your-registry.com/agentic/worker:latest
+  apiGateway: your-registry.com/agentic/api-gateway:latest
+  portal: your-registry.com/agentic/portal:latest
+
+# Application config
+config:
+  TENANT_ID: "your-tenant"
+  CORS_ORIGINS: "https://your-domain.com"
+  NEXT_PUBLIC_SUPABASE_URL: "https://your-project.supabase.co"
+  NEXT_PUBLIC_API_URL: "https://your-domain.com/api"
+
+# Secrets provider (aws or azure)
+secrets:
+  provider: aws
+  aws:
+    region: us-east-1
+    secretName: agentic-system/prod
+```
+
+### 2. Install
+
+```bash
+# Install the chart
+helm install agentic charts/agentic-system \
+  --namespace agentic-system \
+  --create-namespace
+
+# Or upgrade if already installed
+helm upgrade --install agentic charts/agentic-system \
+  --namespace agentic-system \
+  --create-namespace
+```
+
+### 3. Verify
+
+```bash
+kubectl get pods -n agentic-system
+kubectl get ingress -n agentic-system
+```
+
+## Helm Chart Components
+
+The chart deploys:
+
+| Component             | Type       | Purpose                         |
+| --------------------- | ---------- | ------------------------------- |
+| Manager               | Deployment | Tier 1 - Task routing           |
+| Leads Orchestrator    | Deployment | Tier 2 - Lead workflows         |
+| Outreach Orchestrator | Deployment | Tier 2 - Outreach workflows     |
+| RAG Agent             | Deployment | Tier 3 - Retrieval (replicas:2) |
+| Persistence Agent     | Deployment | Tier 3 - CRUD operations        |
+| Copywriter Agent      | Deployment | Tier 3 - AI content             |
+| Scheduler Agent       | Deployment | Tier 3 - Scheduling             |
+| Channel Sequencer     | Deployment | Tier 3 - Message sequencing     |
+| API Gateway           | Deployment | HTTP API                        |
+| Portal                | Deployment | Next.js frontend                |
+| Health Server         | Deployment | Monitoring endpoints            |
+| Ingress               | Ingress    | HTTPS routing                   |
+| HPA                   | HPA        | Auto-scaling                    |
+
+### Chart File Structure
+
+```
+charts/agentic-system/
+├── Chart.yaml              # Chart metadata
+├── values.yaml             # Default configuration
+└── templates/
+    ├── _helpers.tpl        # Template helpers
+    ├── namespace.yaml
+    ├── configmap.yaml
+    ├── secrets-aws.yaml    # AWS Secrets Manager CSI
+    ├── secrets-azure.yaml  # Azure Key Vault CSI
+    ├── deployments-workers.yaml
+    ├── deployment-api-gateway.yaml
+    ├── deployment-portal.yaml
+    ├── deployment-health-server.yaml
+    ├── services.yaml
+    ├── ingress.yaml
+    └── hpa.yaml
+```
+
+### Customizing Values
+
+Override values at install time:
+
+```bash
+helm install agentic charts/agentic-system \
+  --set config.TENANT_ID="production" \
+  --set images.worker="my-registry/worker:v1.0.0" \
+  --set workers[0].replicas=3
+```
+
+Or create a custom values file:
+
+```yaml
+# values-prod.yaml
+config:
+  TENANT_ID: "production"
+  DEBUG: "0"
+
+workers:
+  - name: rag-agent
+    replicas: 5
+```
+
+```bash
+helm install agentic charts/agentic-system -f values-prod.yaml
+```
+
 ## Architecture
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                    Kubernetes Cluster                       â”‚
-â”‚                                                             â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
-â”‚  â”‚                   Namespace: agentic                 â”‚   â”‚
-â”‚  â”‚                                                      â”‚   â”‚
-â”‚  â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”‚   â”‚
-â”‚  â”‚  â”‚Deploymentâ”‚  â”‚Deploymentâ”‚  â”‚    Deployment    â”‚  â”‚   â”‚
-â”‚  â”‚  â”‚ manager  â”‚  â”‚  leads   â”‚  â”‚ rag (replicas:3) â”‚  â”‚   â”‚
-â”‚  â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚   â”‚
-â”‚  â”‚                                                      â”‚   â”‚
-â”‚  â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”‚   â”‚
-â”‚  â”‚  â”‚              Redis StatefulSet                â”‚  â”‚   â”‚
-â”‚  â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚   â”‚
-â”‚  â”‚                                                      â”‚   â”‚
-â”‚  â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”‚   â”‚
-â”‚  â”‚  â”‚           ConfigMap / Secrets                 â”‚  â”‚   â”‚
-â”‚  â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚   â”‚
-â”‚  â”‚                                                      â”‚   â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
-â”‚                                                             â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────────┐
+│                    Kubernetes Cluster                       │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   Namespace: agentic-system          │   │
+│  │                                                      │   │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │   │
+│  │  │Deployment│  │Deployment│  │    Deployment    │  │   │
+│  │  │ manager  │  │  leads   │  │ rag (replicas:2) │  │   │
+│  │  └──────────┘  └──────────┘  └──────────────────┘  │   │
+│  │                                                      │   │
+│  │  ┌──────────────────────────────────────────────┐  │   │
+│  │  │          External: Redis Cloud (TLS)          │  │   │
+│  │  └──────────────────────────────────────────────┘  │   │
+│  │                                                      │   │
+│  │  ┌──────────────────────────────────────────────┐  │   │
+│  │  │           ConfigMap / Secrets (CSI)           │  │   │
+│  │  └──────────────────────────────────────────────┘  │   │
+│  │                                                      │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+## Raw YAML Deployment (Alternative)
 
 ```bash
 # Create namespace
@@ -71,7 +200,7 @@ metadata:
   name: agentic-config
 data:
   TENANT_ID: "agentic-dev"
-  REDIS_URL: "redis://<REDACTED_REDIS_URL>"
+  REDIS_URL: "redis://redis:6379/0"
   LOG_LEVEL: "INFO"
 ```
 
@@ -340,4 +469,3 @@ spec:
 - [Docker Deployment](docker.md)
 - [Secrets Management](secrets.md)
 - [CI/CD](ci-cd.md)
-

@@ -103,10 +103,38 @@ class RedisStreamsClient:
 		"""
 		if not self.ns:
 			return channel
+		# If the key is already prefixed with the configured namespace/tenant, don't double-prefix.
+		# This commonly happens for non-stream keys like '{tenant}:outreach:auto_send'.
+		if channel.startswith(f"{self.ns}:"):
+			return channel
 		# If it's already a canonical system stream key, don't prefix again.
 		if ":manager:" in channel or ":orchestrators:" in channel or ":agents:" in channel:
 			return channel
 		return f"{self.ns}:{channel}"
+
+	# --------------------
+	# Hash helpers (non-stream state)
+	# --------------------
+	def hset(self, name: str, key: str, value: str) -> int:
+		"""Set a field in a hash (HSET)."""
+		return int(self.client.hset(self._chan(name), key, value))
+
+	def hget(self, name: str, key: str) -> Optional[str]:
+		"""Get a field from a hash (HGET)."""
+		return self.client.hget(self._chan(name), key)
+
+	def hdel(self, name: str, *keys: str) -> int:
+		"""Delete one or more fields from a hash (HDEL)."""
+		return int(self.client.hdel(self._chan(name), *keys))
+
+	def hexists(self, name: str, key: str) -> bool:
+		"""Check if a hash field exists (HEXISTS)."""
+		return bool(self.client.hexists(self._chan(name), key))
+
+	def hgetall(self, name: str) -> Dict[str, str]:
+		"""Get all fields and values in a hash (HGETALL)."""
+		data = self.client.hgetall(self._chan(name))
+		return dict(data) if isinstance(data, dict) else {}
 
 	def xlen(self, stream: str) -> int:
 		"""Get stream length (XLEN)."""

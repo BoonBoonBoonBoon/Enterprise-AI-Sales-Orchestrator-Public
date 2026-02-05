@@ -68,11 +68,20 @@ def redis_client():
     # Verify connection
     client.client.ping()
     
-    yield client
-    
-    # Cleanup test streams
-    for key in client.client.scan_iter("test:*"):
-        client.client.delete(key)
+    try:
+        yield client
+    finally:
+        # Cleanup test streams
+        for key in client.client.scan_iter("test:*"):
+            client.client.delete(key)
+        try:
+            client.client.close()
+        except Exception:
+            pass
+        try:
+            client.client.connection_pool.disconnect()
+        except Exception:
+            pass
 
 
 class TestRAGAgentCRUD:
@@ -231,12 +240,15 @@ class TestPersistenceAgentCRUD:
         print_header("PersistenceAgent - Write CRUD Test")
         
         tenant_id = "test-tenant"
-        task_stream = f"{tenant_id}:agents:persistence:tasks"
-        result_stream = f"{tenant_id}:agents:persistence:results"
-        group = "persistence-test"
+        stream_suffix = str(uuid.uuid4())
+        task_stream = f"test:{tenant_id}:{stream_suffix}:agents:persistence:tasks"
+        result_stream = f"test:{tenant_id}:{stream_suffix}:agents:persistence:results"
+        group = f"persistence-test-{stream_suffix}"
         consumer = "test-persist-1"
         
-        # === CREATE: Send write task ===
+        # === CREATE: Prepare group and send write task ===
+        redis_client.xgroup_create(task_stream, group, id="0", mkstream=True)
+		
         print("\n[1] CREATE - Write Task to Database")
         write_payload = {
             "operation": "write",
@@ -255,7 +267,6 @@ class TestPersistenceAgentCRUD:
         
         # === READ: Consume task ===
         print("\n[2] READ - Consume Write Task")
-        redis_client.xgroup_create(task_stream, group, id="0", mkstream=True)
         messages = redis_client.xreadgroup(group, consumer, {task_stream: ">"}, count=1)
         
         assert messages, "No write tasks in stream"

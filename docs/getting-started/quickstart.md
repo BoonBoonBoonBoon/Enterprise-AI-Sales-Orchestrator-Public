@@ -54,7 +54,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_JWT_SECRET=your-jwt-secret
 REDIS_URL=redis://localhost:6379/0
-OPENAI_API_KEY=sk-your-openai-key
+OPENAI_API_KEY=your-openai-api-key
 TENANT_ID=agentic-dev
 ```
 

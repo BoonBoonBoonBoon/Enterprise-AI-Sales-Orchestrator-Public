@@ -2,13 +2,23 @@ langchain==1.0.4
 # Align with langchain 1.0.x to keep deepagents middleware imports available
 langchain-core==1.0.7
 langchain-openai==1.0.1
-supabase
+langgraph>=1.0.2,<1.1.0
+supabase==2.10.0
 python-dotenv
-redis
+redis==5.0.8
 deepagents==0.2.5
 prometheus-client
 requests  # For Loki log push
 pydantic>=2.0.0  # Type-safe schemas and validation
+
+# Email ingress (Tier-0)
+google-api-python-client>=2.110.0
+google-auth>=2.25.0
+google-auth-oauthlib>=1.2.0
+
+# Webhook ingress (FastAPI)
+fastapi>=0.110.0
+uvicorn>=0.27.0
 
 # LLM providers for copywriter agent
 openai>=1.0.0  # OpenAI API (GPT-4, GPT-3.5)

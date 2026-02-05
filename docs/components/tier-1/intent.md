@@ -20,11 +20,11 @@ def classify_intent_rules(event: dict) -> str:
     event_type = event.get("type")
 
     if event_type == "inbound_email":
-        return "inbound_inquiry"
+        return "inbound"
     elif event_type == "campaign_trigger":
-        return "campaign_start"
+        return "start_campaign"
     elif event_type == "lead_qualified":
-        return "draft_reply"
+        return "outbound"
     else:
         return "unknown"
 ```
@@ -38,11 +38,11 @@ async def classify_intent_llm(event: dict, llm) -> str:
     """LLM-based classification for ambiguous events."""
     prompt = f"""
     Classify the following event into one of these intents:
-    - inbound_inquiry: New lead or customer inquiry
-    - campaign_start: Request to start outreach campaign
-    - enrich_lead: Request for lead enrichment
-    - draft_reply: Need to respond to a lead
-    - qualify_lead: Need to score/qualify a lead
+    - inbound: Inbound email / inbound lead event
+    - start_campaign: Request to start outreach campaign
+    - lead_enrichment: Request for lead enrichment
+    - outbound: Outbound messaging / drafting / follow-up
+    - qualify_lead: Score a staging lead and promote if qualified
 
     Event: {json.dumps(event)}
 
@@ -54,15 +54,15 @@ async def classify_intent_llm(event: dict, llm) -> str:
 
 ## Supported Intents
 
-| Intent            | Description               | Trigger Events                |
-| ----------------- | ------------------------- | ----------------------------- |
-| `inbound_inquiry` | New lead/customer contact | Email, form submission        |
-| `campaign_start`  | Begin outreach campaign   | Manual trigger, schedule      |
-| `enrich_lead`     | Add data to lead          | Lead created, manual          |
-| `qualify_lead`    | Score lead                | Enrichment complete           |
-| `draft_reply`     | Create response           | Lead qualified, inbound reply |
-| `send_followup`   | Send follow-up            | Time trigger, no response     |
-| `process_inbound` | Handle inbound message    | Email received                |
+| Intent            | Description                                   | Typical Target         |
+| ----------------- | --------------------------------------------- | ---------------------- |
+| `inbound`         | Inbound email / inbound lead event            | Leads                  |
+| `lead_enrichment` | Enrich a lead profile                         | Leads                  |
+| `qualify_lead`    | Score a staging lead and promote if qualified | Leads                  |
+| `start_campaign`  | Begin outreach campaign                       | Control/Leads/Outbound |
+| `outbound`        | Draft/send outbound messaging                 | Outbound               |
+| `audit`           | Audit / diagnostics                           | Audit                  |
+| `control`         | Control-plane commands                        | Control                |
 
 ## Classification Pipeline
 
@@ -99,7 +99,7 @@ def handle_unknown_intent(event: dict) -> dict:
 
    ```python
    INTENTS = [
-       "inbound_inquiry",
+       "inbound",
        "new_intent_here",  # Add new
        ...
    ]
@@ -114,7 +114,7 @@ def handle_unknown_intent(event: dict) -> dict:
 
 3. Add routing in `router.py`:
    ```python
-   "new_intent_here": f"{tenant_id}:orchestrators:target:tasks"
+    "new_intent_here": f"{tenant_id}:orchestrators:target:tasks"
    ```
 
 ## Related

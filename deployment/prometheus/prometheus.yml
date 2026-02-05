@@ -5,7 +5,9 @@ global:
     cluster: 'agentic-system'
 
 scrape_configs:
-  # Manager metrics
+  # ============================================================================
+  # TIER 1 - Manager
+  # ============================================================================
   - job_name: 'manager'
     static_configs:
       - targets: ['manager:8000']
@@ -14,14 +16,14 @@ scrape_configs:
         target_label: tier
         replacement: manager
 
-  # Orchestrators metrics
+  # ============================================================================
+  # TIER 2 - Orchestrators (ports 8010-8019)
+  # ============================================================================
   - job_name: 'orchestrators'
     static_configs:
       - targets:
-          - 'outreach_orchestrator:8001'
-          - 'leads_orchestrator:8002'
-          - 'audit_orchestrator:8003'
-          - 'inbound_orchestrator:8004'
+          - 'leads_orchestrator:8010'
+          - 'outreach_orchestrator:8011'
     relabel_configs:
       - source_labels: [__address__]
         regex: '([^:]+):.*'
@@ -31,13 +33,17 @@ scrape_configs:
         target_label: tier
         replacement: orchestrator
 
-  # Agents metrics
+  # ============================================================================
+  # TIER 3 - Agents (ports 8020-8029)
+  # ============================================================================
   - job_name: 'agents'
     static_configs:
       - targets:
-          - 'copywriter_agent:8010'
-          - 'persistence_agent:8011'
-          - 'rag_agent:8012'
+          - 'persistence_agent:8020'
+          - 'rag_agent:8021'
+          - 'copywriter_agent:8022'
+          - 'channel_sequencer_agent:8023'
+          - 'scheduler_agent:8025'
     relabel_configs:
       - source_labels: [__address__]
         regex: '([^:]+):.*'
@@ -47,6 +53,9 @@ scrape_configs:
         target_label: tier
         replacement: agent
 
+  # ============================================================================
+  # Infrastructure
+  # ============================================================================
   # Redis exporter
   - job_name: 'redis'
     static_configs:

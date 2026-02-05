@@ -1,4 +1,4 @@
-﻿# Deployment Guide
+# Deployment Guide
 
 Complete procedures for deploying the Agentic System in different environments.
 
@@ -21,9 +21,9 @@ cp deployment/.env.example .env
 
 # 3. Add your API keys
 # Edit .env with:
-# - OPENAI_API_KEY=sk-...
+# - OPENAI_API_KEY=your-openai-api-key
 # - SUPABASE_URL=...
-# - SUPABASE_KEY=...
+# - SUPABASE_ANON_KEY=your-anon-key
 
 # 4. Start services
 docker compose --profile local up -d --build
@@ -42,13 +42,15 @@ docker compose --profile local up -d
 ```
 
 **Configuration:**
+
 ```env
-REDIS_URL=redis://<REDACTED_REDIS_URL>        # Local Redis
+REDIS_URL=redis://redis:6379/0        # Local Redis
 SUPABASE_URL=                          # Optional (use local Postgres)
 VECTOR_DB_BACKEND=in-memory            # Fast, no external dependency
 ```
 
 **Services running:**
+
 - manager (tier_1)
 - leads_orchestrator, outreach_orchestrator (tier_2)
 - rag_agent, persistence_agent, copywriter_agent (tier_3)
@@ -62,8 +64,9 @@ docker compose up -d
 ```
 
 **Configuration:**
+
 ```env
-REDIS_URL=redis://<REDACTED_REDIS_URL>    # Redis Cloud
+REDIS_URL=redis://staging-redis:6379    # Redis Cloud
 SUPABASE_URL=https://staging.supabase.co
 VECTOR_DB_BACKEND=pinecone              # Pinecone staging
 OTEL_ENABLED=1                          # Tracing
@@ -78,8 +81,9 @@ docker stack deploy -c deployment/docker-compose.yml agentic
 ```
 
 **Configuration:**
+
 ```env
-REDIS_URL=redis://<REDACTED_REDIS_URL>      # Managed Redis
+REDIS_URL=redis://prod-redis:6379      # Managed Redis
 SUPABASE_URL=https://prod.supabase.co  # Production project
 VECTOR_DB_BACKEND=pinecone             # Production space
 OTEL_ENABLED=1                         # Observability
@@ -150,6 +154,7 @@ docker compose exec rag_agent env | grep REDIS
 **Location:** `deployment/docker/Dockerfile.worker`
 
 **Multi-stage build:**
+
 1. Base image (python:3.11-slim)
 2. Install dependencies
 3. Copy application code
@@ -158,6 +163,7 @@ docker compose exec rag_agent env | grep REDIS
 6. Define entrypoint
 
 **Key features:**
+
 - Minimal image size (~500MB)
 - Health checks included
 - Security best practices (non-root user)
@@ -185,12 +191,12 @@ docker images | grep agentic
 
 ```env
 # API Keys
-OPENAI_API_KEY=sk-proj-...
+OPENAI_API_KEY=your-openai-api-key
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_KEY=eyJ...
+SUPABASE_ANON_KEY=your-anon-key
 
 # Infrastructure
-REDIS_URL=redis://<REDACTED_REDIS_URL>
+REDIS_URL=redis://redis:6379/0
 TENANT_ID=agentic-prod
 ```
 
@@ -282,12 +288,12 @@ curl http://localhost:8080/metrics | grep "worker_processing_seconds"
 
 ### Key Metrics to Monitor
 
-| Metric | Threshold | Action |
-|--------|-----------|--------|
-| Consumer lag | > 1000 messages | Scale up agents |
-| Error rate | > 5% | Check logs, investigate failures |
-| Processing latency p95 | > 5 seconds | Optimize agent or add resources |
-| Cache hit rate | < 50% | Increase cache size |
+| Metric                 | Threshold       | Action                           |
+| ---------------------- | --------------- | -------------------------------- |
+| Consumer lag           | > 1000 messages | Scale up agents                  |
+| Error rate             | > 5%            | Check logs, investigate failures |
+| Processing latency p95 | > 5 seconds     | Optimize agent or add resources  |
+| Cache hit rate         | < 50%           | Increase cache size              |
 
 ### Logging
 
@@ -479,13 +485,13 @@ services:
   manager:
     mem_limit: 512m
     cpus: 0.5
-  
+
   persistence_agent:
     mem_limit: 1g
     cpus: 1
-    
+
   copywriter_agent:
-    mem_limit: 2g  # Higher for LLM processing
+    mem_limit: 2g # Higher for LLM processing
     cpus: 2
 ```
 
@@ -564,4 +570,3 @@ SSL_CA_CERT=/etc/ssl/certs/ca-bundle.crt
 **Last Updated:** Task 17 - Deployment documentation  
 **Supported Environments:** Local, Staging, Production  
 **Container Orchestration:** Docker Compose, Docker Swarm, Kubernetes-ready
-

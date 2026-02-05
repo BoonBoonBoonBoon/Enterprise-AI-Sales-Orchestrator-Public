@@ -10,6 +10,8 @@ class LeadResolution(BaseModel):
     confidence: float = 0.0
     source: Optional[str] = None  # e.g., "deterministic_lookup", "rag"
     alternatives: List[Dict[str, Any]] = Field(default_factory=list)
+    # Full lead record when found (first_name, last_name, company, title, email, etc.)
+    lead_data: Optional[Dict[str, Any]] = None
 
 
 class ConversationSummary(BaseModel):
@@ -20,8 +22,11 @@ class ConversationSummary(BaseModel):
 
 
 class Facts(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     company: Optional[str] = None
     role: Optional[str] = None
+    email: Optional[str] = None
     intent: Optional[str] = None
     risk_flags: List[str] = Field(default_factory=list)
     extras: Dict[str, Any] = Field(default_factory=dict)

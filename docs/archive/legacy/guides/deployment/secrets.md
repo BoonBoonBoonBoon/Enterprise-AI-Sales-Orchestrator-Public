@@ -1,4 +1,4 @@
-﻿# Secrets Management Integration Guide
+# Secrets Management Integration Guide
 
 ## Overview
 
@@ -22,8 +22,8 @@ cp .env.example .env
 
 # Edit .env with your credentials
 # SECRETS_PROVIDER=env (default)
-# OPENAI_API_KEY=sk-...
-# REDIS_URL=redis://<REDACTED_REDIS_URL>
+# OPENAI_API_KEY=your-openai-api-key
+# REDIS_URL=redis://...
 ```
 
 No code changes needed! The system automatically loads from `.env` when `SECRETS_PROVIDER=env` (or unset).
@@ -56,8 +56,8 @@ az keyvault create \
 
 ```bash
 # Azure Key Vault uses hyphens instead of underscores
-az keyvault secret set --vault-name agentic-system-prod --name OPENAI-API-KEY --value "sk-..."
-az keyvault secret set --vault-name agentic-system-prod --name REDIS-URL --value "redis://<REDACTED_REDIS_URL>"
+az keyvault secret set --vault-name agentic-system-prod --name OPENAI-API-KEY --value "your-openai-api-key"
+az keyvault secret set --vault-name agentic-system-prod --name REDIS-URL --value "redis://..."
 az keyvault secret set --vault-name agentic-system-prod --name SUPABASE-URL --value "https://..."
 az keyvault secret set --vault-name agentic-system-prod --name SUPABASE-KEY --value "eyJ..."
 ```
@@ -130,7 +130,7 @@ aws secretsmanager create-secret \
   --name agentic-system/prod \
   --secret-string '{
     "OPENAI_API_KEY": "sk-...",
-    "REDIS_URL": "redis://<REDACTED_REDIS_URL>",
+    "REDIS_URL": "redis://...",
     "SUPABASE_URL": "https://...",
     "SUPABASE_KEY": "eyJ..."
   }' \
@@ -610,7 +610,6 @@ Check if secrets provider is accessible.
 
 ---
 
-**Status:** âœ… Production Ready
+**Status:** ✅ Production Ready
 
 **Last Updated:** October 27, 2025
-

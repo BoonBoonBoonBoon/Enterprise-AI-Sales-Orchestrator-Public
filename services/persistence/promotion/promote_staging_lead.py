@@ -29,6 +29,22 @@ def promote_staging_lead_to_lead(
     """
 
     svc = service or build_supabase_service()
+    adapter = getattr(svc, "adapter", None)
+
+    if adapter and hasattr(adapter, "rpc"):
+        try:
+            result = adapter.rpc(
+                "promote_staging_lead_atomic",
+                {
+                    "p_staging_lead_id": staging_lead_id,
+                    "p_lead_id": lead_id,
+                },
+            )
+            if isinstance(result, dict) and result.get("ok"):
+                return result
+        except Exception as exc:
+            logger.warning("Atomic promotion RPC failed, falling back (%s)", exc)
+
     now = _utc_now_iso()
 
     created_conversations: List[Dict[str, Any]] = []

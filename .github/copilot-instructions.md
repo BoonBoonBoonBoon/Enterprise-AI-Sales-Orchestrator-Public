@@ -52,8 +52,8 @@ Strictly follow this naming convention. Do NOT invent new patterns.
 
 - **Root:** `c:\Users\Elliot\Desktop\Agency Files\Important\Technicals\Agentic System`
 - **Tiers:** `tiers/tier_{1,2,3}/<component_name>/`
-- **Core:** `core/` (Harness, Envelope, DeepAgents)
-- **Services:** `services/` (Redis, Persistence)
+- **Core:** `core/` (Harness, Envelope, DeepAgents, Intent, DLQ, Shutdown, Tokens)
+- **Services:** `services/` (Redis, Persistence, Email)
 
 **Import Convention:**
 Always use absolute imports from the project root.
@@ -256,3 +256,40 @@ $env:CAMPAIGN_ID_PLACEHOLDER = "9646f98a-e987-4a8c-b786-9b82ea985d38"  # optiona
 - Store pre-qualification threads in `staging_conversations` (FK → `staging_leads`) and `staging_messages` (FK → `staging_conversations`) so RAG can surface early replies.
 - On promotion: create the lead in `leads`, replay staging conversations/messages into `conversations`/`messages`, then soft-delete staging rows via `archived_at` (keep audit history; no hard deletes).
 - Promotion is manual today; later automation can live in Manager policy or a dedicated promotion/audit agent, but keep orchestration vertical (Manager mediates any cross-orchestrator coordination).
+
+## 10. Core Utilities (Jan 2026)
+
+### Intent Enum (`core/intent.py`)
+
+- Use `Intent` enum instead of hardcoded strings: `Intent.INBOUND`, `Intent.REPLY_EMAIL`, etc.
+- Parse strings with `Intent.from_string("inbound")` (case-insensitive, returns `Intent.UNKNOWN` for invalid values).
+- Check categories with `ROUTING_INTENTS` and `ACTION_INTENTS` frozensets.
+
+### Dead Letter Queue (`core/dlq.py`)
+
+- `DeadLetterQueue` class routes failed messages to `{stream}:dlq` after max retries.
+- Configurable via `DLQ_ENABLED`, `DLQ_MAX_RETRIES`, `DLQ_STREAM_SUFFIX` env vars.
+- Use `dlq.should_dlq(failure_count)` to check, `dlq.send_to_dlq(msg, msg_id, error=e)` to route.
+- Supports `peek_dlq()`, `requeue_message()` for manual inspection and retry.
+
+### Graceful Shutdown (`core/shutdown.py`)
+
+- `ShutdownHandler` catches SIGTERM/SIGINT and waits for in-flight tasks.
+- Use `handler.register_signals()` from main thread, `handler.processing_context()` around task processing.
+- Configurable timeout (default 30s) before forcing shutdown.
+
+### Token Management (`core/tokens.py`)
+
+- `estimate_tokens(text)` for fast token estimation (~4 chars/token).
+- `truncate_messages_by_tokens(messages, max_tokens)` preserves recent messages within budget.
+- `TokenBudget` class tracks cumulative token usage while building prompts.
+- RAG `build_reply_context()` now supports `max_tokens` parameter.
+
+### Email Dry-Run (`EMAIL_DRY_RUN=1`)
+
+- Set `EMAIL_DRY_RUN=1` to log emails instead of sending (for dev/test).
+
+### Inbox Backpressure (`INBOX_BACKPRESSURE_ENABLED=1`)
+
+- Skips poll if Manager stream has > `INBOX_MAX_PENDING` (default 100) messages.
+- Prevents overwhelming downstream during high load or outages.

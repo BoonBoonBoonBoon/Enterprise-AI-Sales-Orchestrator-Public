@@ -1,4 +1,4 @@
-﻿###################################################################################################
+###################################################################################################
 # docker-compose.monitoring.yml
 # -------------------------------------------------------------------------------------------------
 # Extends the base stack with an observability suite:
@@ -47,7 +47,7 @@ services:
       dockerfile: monitoring/Dockerfile.stream-exporter
     container_name: observ_stream_exporter
     environment:
-      - REDIS_URL=redis://<REDACTED_REDIS_URL>
+      - REDIS_URL=redis://agentic_redis:6379
       - NAMESPACE=agentic-dev
       - METRICS_PORT=8000
     ports:

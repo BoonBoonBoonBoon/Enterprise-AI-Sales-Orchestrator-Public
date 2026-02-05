@@ -1,4 +1,4 @@
-﻿# Environment Setup
+# Environment Setup
 
 Complete guide to configuring all environment variables required by the Agentic System.
 
@@ -23,23 +23,23 @@ Complete guide to configuring all environment variables required by the Agentic 
 
 | Variable                    | Required | Example                      | Description                              |
 | --------------------------- | -------- | ---------------------------- | ---------------------------------------- |
-| `SUPABASE_URL`              | âœ…       | `https://abc123.supabase.co` | Your Supabase project URL                |
-| `SUPABASE_ANON_KEY`         | âœ…       | `eyJhbGciOiJIUzI1NiIs...`    | Supabase anonymous/public key            |
-| `SUPABASE_JWT_SECRET`       | âœ…       | `your-jwt-secret`            | JWT secret for signing custom tokens     |
-| `SUPABASE_SERVICE_ROLE_KEY` | âš ï¸       | `eyJhbGciOiJIUzI1NiIs...`    | Service role key (admin operations only) |
+| `SUPABASE_URL`              | ✅       | `https://abc123.supabase.co` | Your Supabase project URL                |
+| `SUPABASE_ANON_KEY`         | ✅       | `your-anon-key`              | Supabase anonymous/public key            |
+| `SUPABASE_JWT_SECRET`       | ✅       | `your-jwt-secret`            | JWT secret for signing custom tokens     |
+| `SUPABASE_SERVICE_ROLE_KEY` | ⚠️       | `your-service-role-key`      | Service role key (admin operations only) |
 
 **Where to find:**
 
 1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
-2. Select your project â†’ Settings â†’ API
+2. Select your project → Settings → API
 3. Copy the URL and keys
 
 ### Redis
 
 | Variable         | Required | Example                    | Description                      |
 | ---------------- | -------- | -------------------------- | -------------------------------- |
-| `REDIS_URL`      | âœ…       | `redis://localhost:6379/0` | Redis connection URL             |
-| `REDIS_PASSWORD` | âš ï¸       | `your-redis-password`      | Redis password (if auth enabled) |
+| `REDIS_URL`      | ✅       | `redis://localhost:6379/0` | Redis connection URL             |
+| `REDIS_PASSWORD` | ⚠️       | `your-redis-password`      | Redis password (if auth enabled) |
 
 **Local development:**
 
@@ -50,17 +50,17 @@ REDIS_URL=redis://localhost:6379/0
 **Docker:**
 
 ```
-REDIS_URL=redis://<REDACTED_REDIS_URL>
+REDIS_URL=redis://redis:6379/0
 ```
 
 ### LLM Providers
 
-| Variable            | Required | Example      | Description                                   |
-| ------------------- | -------- | ------------ | --------------------------------------------- |
-| `OPENAI_API_KEY`    | âœ…\*     | `sk-...`     | OpenAI API key                                |
-| `ANTHROPIC_API_KEY` | âš ï¸       | `sk-ant-...` | Anthropic API key (alternative)               |
-| `LLM_PROVIDER`      | âš ï¸       | `openai`     | Which provider to use (`openai`, `anthropic`) |
-| `LLM_MODEL`         | âš ï¸       | `gpt-4o`     | Model name to use                             |
+| Variable            | Required | Example                  | Description                                   |
+| ------------------- | -------- | ------------------------ | --------------------------------------------- |
+| `OPENAI_API_KEY`    | ✅\*     | `your-openai-api-key`    | OpenAI API key                                |
+| `ANTHROPIC_API_KEY` | ⚠️       | `your-anthropic-api-key` | Anthropic API key (alternative)               |
+| `LLM_PROVIDER`      | ⚠️       | `openai`                 | Which provider to use (`openai`, `anthropic`) |
+| `LLM_MODEL`         | ⚠️       | `gpt-4o`                 | Model name to use                             |
 
 \*At least one LLM provider key is required.
 
@@ -68,26 +68,26 @@ REDIS_URL=redis://<REDACTED_REDIS_URL>
 
 | Variable                  | Required | Example        | Description                             |
 | ------------------------- | -------- | -------------- | --------------------------------------- |
-| `TENANT_ID`               | âœ…       | `agentic-dev`  | Default tenant identifier               |
-| `CAMPAIGN_ID_PLACEHOLDER` | âš ï¸       | `9646f98a-...` | Fallback campaign UUID for orphan leads |
+| `TENANT_ID`               | ✅       | `agentic-dev`  | Default tenant identifier               |
+| `CAMPAIGN_ID_PLACEHOLDER` | ⚠️       | `9646f98a-...` | Fallback campaign UUID for orphan leads |
 
 ### Email (Gmail)
 
 | Variable              | Required | Example                            | Description          |
 | --------------------- | -------- | ---------------------------------- | -------------------- |
-| `GMAIL_CLIENT_ID`     | âš ï¸       | `123...apps.googleusercontent.com` | OAuth client ID      |
-| `GMAIL_CLIENT_SECRET` | âš ï¸       | `GOCSPX-...`                       | OAuth client secret  |
-| `GMAIL_REFRESH_TOKEN` | âš ï¸       | `1//0g...`                         | OAuth refresh token  |
-| `GMAIL_SENDER_EMAIL`  | âš ï¸       | `you.mock@example-test.com`                    | Sender email address |
+| `GMAIL_CLIENT_ID`     | ⚠️       | `123...apps.googleusercontent.com` | OAuth client ID      |
+| `GMAIL_CLIENT_SECRET` | ⚠️       | `your-client-secret`               | OAuth client secret  |
+| `GMAIL_REFRESH_TOKEN` | ⚠️       | `your-refresh-token`               | OAuth refresh token  |
+| `GMAIL_SENDER_EMAIL`  | ⚠️       | `you@gmail.com`                    | Sender email address |
 
 ### Observability
 
 | Variable                      | Required | Example                 | Description                                         |
 | ----------------------------- | -------- | ----------------------- | --------------------------------------------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | âš ï¸       | `http://localhost:4317` | OpenTelemetry collector endpoint                    |
-| `OTEL_SERVICE_NAME`           | âš ï¸       | `agentic-system`        | Service name for traces                             |
-| `DATADOG_API_KEY`             | âš ï¸       | `dd-api-...`            | Datadog API key                                     |
-| `LOG_LEVEL`                   | âš ï¸       | `INFO`                  | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | ⚠️       | `http://localhost:4317` | OpenTelemetry collector endpoint                    |
+| `OTEL_SERVICE_NAME`           | ⚠️       | `agentic-system`        | Service name for traces                             |
+| `DATADOG_API_KEY`             | ⚠️       | `dd-api-...`            | Datadog API key                                     |
+| `LOG_LEVEL`                   | ⚠️       | `INFO`                  | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 
 ## Environment File Template
 
@@ -105,7 +105,7 @@ SUPABASE_JWT_SECRET=your-jwt-secret
 REDIS_URL=redis://localhost:6379/0
 
 # LLM
-OPENAI_API_KEY=sk-your-openai-key
+OPENAI_API_KEY=your-openai-api-key
 
 # Tenant
 TENANT_ID=agentic-dev
@@ -119,7 +119,7 @@ TENANT_ID=agentic-dev
 # REDIS_PASSWORD=your-redis-password
 
 # Alternative LLM
-# ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_API_KEY=your-anthropic-api-key
 # LLM_PROVIDER=openai
 # LLM_MODEL=gpt-4o
 
@@ -130,7 +130,7 @@ TENANT_ID=agentic-dev
 # GMAIL_CLIENT_ID=your-client-id
 # GMAIL_CLIENT_SECRET=your-client-secret
 # GMAIL_REFRESH_TOKEN=your-refresh-token
-# GMAIL_SENDER_EMAIL=you.mock@example-test.com
+# GMAIL_SENDER_EMAIL=you@gmail.com
 
 # Observability
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
@@ -173,7 +173,7 @@ Start Redis:
 docker run -d -p 6379:6379 redis:7-alpine
 
 # Or use the task
-# Ctrl+Shift+P â†’ Tasks: Run Task â†’ "Redis: Start"
+# Ctrl+Shift+P → Tasks: Run Task → "Redis: Start"
 ```
 
 ### "Invalid API key" (OpenAI)
@@ -184,10 +184,7 @@ docker run -d -p 6379:6379 redis:7-alpine
 
 ## Security Notes
 
-1. **Never commit `.env`** â€” It's in `.gitignore` by default
-2. **Use secrets manager in production** â€” See [Secrets Management](../guides/deploy/secrets.md)
-3. **Rotate keys regularly** â€” Especially after team changes
-4. **Use minimal permissions** â€” `agent_reader` for RAG, `agent_writer` for Persistence only
-
-
-
+1. **Never commit `.env`** — It's in `.gitignore` by default
+2. **Use secrets manager in production** — See [Secrets Management](../guides/deploy/secrets.md)
+3. **Rotate keys regularly** — Especially after team changes
+4. **Use minimal permissions** — `agent_reader` for RAG, `agent_writer` for Persistence only

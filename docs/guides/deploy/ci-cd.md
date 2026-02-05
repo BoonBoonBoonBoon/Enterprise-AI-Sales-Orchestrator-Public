@@ -6,17 +6,108 @@ This guide covers continuous integration and deployment for the Agentic System.
 
 ```
 ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
-│  Push   │───▶│  Test   │───▶│  Build  │───▶│ Deploy  │
-│         │    │         │    │         │    │         │
-└─────────┘    └─────────┘    └─────────┘    └─────────┘
-                   │              │              │
-                   ▼              ▼              ▼
-              Unit Tests     Docker Image    Kubernetes
-              Integration    Push to          Apply
-              Lint/Type      Registry        Manifests
+│  Push   │───▶│  Lint   │───▶│  Test   │───▶│  Build  │───▶│ Deploy  │
+│         │    │  +Type  │    │         │    │         │    │  (Helm) │
+└─────────┘    └─────────┘    └─────────┘    └─────────┘    └─────────┘
+                   │              │              │              │
+                   ▼              ▼              ▼              ▼
+              Ruff + Mypy    Unit Tests     Docker Image    helm upgrade
+              Code Quality   Integration    Push to         --install
+                             Coverage       Registry
 ```
 
-## GitHub Actions
+## GitLab CI (Primary)
+
+This project uses GitLab CI for continuous integration and deployment. The pipeline file is [`.gitlab-ci.yml`](../../../.gitlab-ci.yml).
+
+### Pipeline Stages
+
+| Stage    | Jobs                                                | Purpose                     |
+| -------- | --------------------------------------------------- | --------------------------- |
+| `lint`   | `lint`                                              | Ruff + Mypy static analysis |
+| `test`   | `test`                                              | Pytest with Redis service   |
+| `build`  | `build_worker`, `build_api_gateway`, `build_portal` | Docker image builds         |
+| `deploy` | `deploy`, `deploy_staging`                          | Helm deployment to K8s      |
+
+### Test Gating
+
+!!! important "Builds require passing tests"
+The `build_*` jobs include `needs: ["lint", "test"]` — images are only built if lint and tests pass. This prevents broken code from reaching production.
+
+### GitLab CI Configuration
+
+```yaml
+# .gitlab-ci.yml (excerpt)
+stages:
+  - lint
+  - test
+  - build
+  - deploy
+
+lint:
+  stage: lint
+  image: python:3.13-slim
+  script:
+    - ruff check .
+    - mypy . --ignore-missing-imports
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+
+test:
+  stage: test
+  image: python:3.13-slim
+  services:
+    - redis:7-alpine
+  script:
+    - pytest tests/ -v --junitxml=report.xml --cov=.
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+build_worker:
+  extends: .default_docker
+  stage: build
+  needs: ["lint", "test"]
+  script:
+    - docker build -f deployment/docker/Dockerfile.worker -t "$CI_REGISTRY_IMAGE/worker:$IMAGE_TAG" .
+    - docker push "$CI_REGISTRY_IMAGE/worker:$IMAGE_TAG"
+
+deploy:
+  stage: deploy
+  image: alpine/helm:3.14.0
+  needs: ["build_worker", "build_api_gateway", "build_portal"]
+  script:
+    - helm upgrade --install agentic charts/agentic-system \
+      --namespace agentic-system \
+      --set images.worker="${CI_REGISTRY_IMAGE}/worker:${IMAGE_TAG}"
+```
+
+### Required GitLab Variables
+
+Configure these in **Settings → CI/CD → Variables**:
+
+| Variable               | Description                                  | Protected | Masked |
+| ---------------------- | -------------------------------------------- | --------- | ------ |
+| `CI_REGISTRY_USER`     | Container registry username (auto if GitLab) | ✓         | ✗      |
+| `CI_REGISTRY_PASSWORD` | Container registry token                     | ✓         | ✓      |
+| `KUBE_CONFIG`          | Base64-encoded kubeconfig for production     | ✓         | ✓      |
+| `KUBE_CONFIG_STAGING`  | Base64-encoded kubeconfig for staging        | ✓         | ✓      |
+
+### Branch Protection
+
+To enforce test-gating on merge:
+
+1. Go to **Settings → Repository → Protected Branches**
+2. Select your main/master branch
+3. Enable **"Pipelines must succeed"**
+4. Optionally require code review approvals
+
+## GitHub Actions (Alternative)
 
 ### Test Workflow
 

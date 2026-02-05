@@ -44,13 +44,14 @@ The execution layer of the Agentic System. Tier 3 contains specialized **Agents*
 | [RAG Agent](rag.md)                 | ✅ Active | `agent_reader` | `tiers/tier_3/rag_agent/`         | Context retrieval, vector search, lead enrichment |
 | [Persistence Agent](persistence.md) | ✅ Active | `agent_writer` | `tiers/tier_3/persistence_agent/` | CRUD operations on all tables                     |
 | [Copywriter Agent](copywriter.md)   | ✅ Active | None           | `tiers/tier_3/copywriter_agent/`  | AI-powered content generation                     |
+| [Classifier Agent](classifier.md)   | ✅ Active | None           | `tiers/tier_3/classifier_agent/`  | Email triage/classification for inbound workflows |
 
 ### In Development
 
-| Agent             | Status      | Path                                    | Planned Purpose                   |
-| ----------------- | ----------- | --------------------------------------- | --------------------------------- |
-| Scheduler Agent   | 🚧 Skeleton | `tiers/tier_3/scheduler_agent/`         | Task scheduling, delay management |
-| Channel Sequencer | 🚧 Skeleton | `tiers/tier_3/channel_sequencer_agent/` | Multi-channel campaign sequencing |
+| Agent                                     | Status         | Path                                    | Planned Purpose                            |
+| ----------------------------------------- | -------------- | --------------------------------------- | ------------------------------------------ |
+| Scheduler Agent                           | 🚧 Skeleton    | `tiers/tier_3/scheduler_agent/`         | Task scheduling, delay management          |
+| [Channel Sequencer](channel-sequencer.md) | 🚧 In Progress | `tiers/tier_3/channel_sequencer_agent/` | MVP-safe outbound sequencing + persistence |
 
 See [Roadmap → In Progress](../../roadmap/in-progress.md) for development status.
 

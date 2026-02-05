@@ -13,11 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Architecture Decision Records (ADRs) section
 - Roadmap with in-progress and future plans
 - Environment setup guide with all variables documented
+- ADR-007 January 2026 platform + website integration summary
 
 ### Changed
 
 - Documentation structure reorganized around user journey
 - Archived outdated documentation to `docs/archive/`
+- Canonicalized the typed envelope as the standard message format (legacy shapes normalize into it)
+- Standardized DLQ behavior across consumers (max retries routes to `:dlq` and ACKs original)
 
 ### Deprecated
 
@@ -39,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Redis Streams messaging backbone
 - Agent Harness pattern with retries and circuit breakers
 - Message Envelope schema (TaskEnvelope, ResultEnvelope)
+- Typed Message Envelope schema (canonical typed envelope)
 - Multi-tenant stream isolation
 
 #### Tier 1 - Manager

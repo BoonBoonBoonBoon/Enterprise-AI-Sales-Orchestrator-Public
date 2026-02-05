@@ -27,9 +27,13 @@ try:
 except Exception:
     pass
 
+from config.settings import validate_keys
+
 from services.redis import RedisStreamsClient
 from .leads_orchestrator_harness import LeadsOrchestratorHarness
 from core.envelope import from_redis_message, to_redis_fields, result as create_result_envelope, error as create_error_envelope
+from core.dlq import DeadLetterQueue
+from core.observability import start_metrics_server, start_redis_stream_metrics
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,6 +79,7 @@ class LeadsConsumer:
         # Stream names - these will be prefixed by RedisStreamsClient with namespace
         self.task_stream = f"{tenant_id}:orchestrators:leads:tasks"
         self.result_stream = f"{tenant_id}:orchestrators:leads:results"
+        self.dlq = DeadLetterQueue(redis_client, self.task_stream)
         
         # Create harness
         self.harness = LeadsOrchestratorHarness(
@@ -91,6 +96,50 @@ class LeadsConsumer:
             f"LeadsConsumer initialized: tenant={tenant_id}, "
             f"group={consumer_group}, name={self.consumer_name}"
         )
+
+    def _get_delivery_count(self, message_id: str) -> int:
+        try:
+            client = getattr(self.redis, "client", self.redis)
+            pending = client.xpending_range(
+                self.task_stream,
+                self.consumer_group,
+                min=message_id,
+                max=message_id,
+                count=1,
+            )
+            if pending:
+                entry = pending[0]
+                if isinstance(entry, dict):
+                    return int(entry.get("times_delivered", 1))
+                if isinstance(entry, (list, tuple)) and len(entry) >= 4:
+                    return int(entry[3])
+        except Exception:
+            pass
+        return 1
+
+    def _handle_failure(self, message_id: str, message_data: Dict[str, Any], error: Exception, envelope=None) -> None:
+        failure_count = self._get_delivery_count(message_id)
+        if self.dlq.should_dlq(failure_count):
+            self.dlq.send_to_dlq(
+                message_data,
+                message_id,
+                error=error,
+                failure_count=failure_count,
+                consumer_name=self.consumer_name,
+                tenant_id=self.tenant_id,
+            )
+            if envelope is not None:
+                try:
+                    error_envelope = create_error_envelope(
+                        original=envelope,
+                        error_msg=str(error),
+                        source="leads_orchestrator",
+                        code="LEADS_ORCH_ERROR",
+                    )
+                    self.redis.xadd(self.result_stream, to_redis_fields(error_envelope))
+                except Exception as publish_exc:  # pragma: no cover - best effort
+                    logger.error(f"Failed to publish error envelope: {publish_exc}", exc_info=True)
+            self.redis.xack(self.task_stream, self.consumer_group, message_id)
     
     def _ensure_consumer_group(self):
         """Create consumer group if it doesn't exist"""
@@ -157,8 +206,7 @@ class LeadsConsumer:
             
         except Exception as e:
             logger.error(f"Error processing task: {e}", exc_info=True)
-            
-            # Don't ack - let it retry or go to pending
+            self._handle_failure(message_id, message_data, e, envelope=locals().get("envelope"))
             raise
     
     async def run(self, block_ms: int = 5000, count: int = 10):
@@ -183,7 +231,17 @@ class LeadsConsumer:
                 )
                 
                 if not messages:
-                    continue
+                    # Attempt to reprocess pending messages to enable retries/DLQ
+                    pending = self.redis.xreadgroup(
+                        group=self.consumer_group,
+                        consumer=self.consumer_name,
+                        streams={self.task_stream: "0"},
+                        count=1,
+                        block=1,
+                    )
+                    if not pending:
+                        continue
+                    messages = pending
                 
                 # Process messages
                 for stream_name, stream_messages in messages:
@@ -211,9 +269,13 @@ class LeadsConsumer:
 
 async def main():
     """Main entry point"""
+        validate_keys(raise_on_missing=True)
     # Get configuration from environment
     tenant_id = os.getenv("TENANT_ID", "default")
     environment = os.getenv("ENVIRONMENT", "development")
+    
+    # Start metrics server for this component
+    start_metrics_server(component="leads_orchestrator")
     
     # Connect to Redis - use RedisStreamsClient which handles namespace prefixing
     redis_url = os.getenv("REDIS_URL")
@@ -221,6 +283,13 @@ async def main():
         raise SystemExit("REDIS_URL is not set (required for leads_orchestrator)")
 
     redis_streams = RedisStreamsClient(url=redis_url)
+
+    start_redis_stream_metrics(
+        redis_url=redis_url,
+        tenant_id=tenant_id,
+        component="leads_orchestrator",
+        streams=[(f"{tenant_id}:orchestrators:leads:tasks", "leads-workers")],
+    )
     
     # Create consumer
     consumer = LeadsConsumer(

@@ -14,7 +14,7 @@ services:
       - '--storage.tsdb.retention.time=30d'
       - '--web.enable-lifecycle'
     networks:
-      - agentic_network
+      - agentic-network
     restart: unless-stopped
 
   # Loki - Log aggregation
@@ -26,7 +26,7 @@ services:
     volumes:
       - loki_data:/loki
     networks:
-      - agentic_network
+      - agentic-network
     restart: unless-stopped
 
   # Promtail - Log shipper (scrapes Docker logs)
@@ -38,7 +38,7 @@ services:
       - //var/run/docker.sock:/var/run/docker.sock
     command: -config.file=/etc/promtail/config.yml
     networks:
-      - agentic_network
+      - agentic-network
     restart: unless-stopped
 
   # Grafana - Visualization
@@ -57,7 +57,7 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     networks:
-      - agentic_network
+      - agentic-network
     depends_on:
       - prometheus
       - loki
@@ -76,7 +76,7 @@ services:
       - tempo_data:/tmp/tempo
     command: [ "-config.file=/etc/tempo.yaml" ]
     networks:
-      - agentic_network
+      - agentic-network
     restart: unless-stopped
 
   # Redis Exporter - Monitor Redis metrics (optional - only if you have Redis running)
@@ -99,5 +99,5 @@ volumes:
   tempo_data:
 
 networks:
-  agentic_network:
+  agentic-network:
     driver: bridge

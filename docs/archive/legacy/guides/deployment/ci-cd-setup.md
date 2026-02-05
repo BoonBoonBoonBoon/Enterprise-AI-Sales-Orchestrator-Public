@@ -1,11 +1,11 @@
-﻿# CI/CD Pipeline Setup
+# CI/CD Pipeline Setup
 
 ## Overview
 
 This document describes the continuous integration and deployment pipeline for the Agentic System. The CI/CD setup ensures code quality, prevents regressions, and enables safe automated deployments across environments.
 
 **Last Updated:** October 29, 2025  
-**Status:** âœ… Production Ready
+**Status:** ✅ Production Ready
 
 ---
 
@@ -29,43 +29,42 @@ This document describes the continuous integration and deployment pipeline for t
 ### Pipeline Overview
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                         Developer Push                          â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                             â”‚
-                   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-                   â”‚  GitHub Actions   â”‚
-                   â”‚    Triggered      â”‚
-                   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                             â”‚
-              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-              â”‚                             â”‚
-    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”      â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    â”‚   Pre-Production   â”‚      â”‚    Production      â”‚
-    â”‚   Workflow (preprod)â”‚      â”‚  Workflow (hazard) â”‚
-    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜      â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-              â”‚                            â”‚
-    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”      â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    â”‚  1. Linting        â”‚      â”‚  1. All Preprod    â”‚
-    â”‚  2. Type Checking  â”‚      â”‚     Checks         â”‚
-    â”‚  3. Import Tests   â”‚      â”‚  2. Integration    â”‚
-    â”‚  4. Unit Tests     â”‚      â”‚     Tests          â”‚
-    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜      â”‚  3. Redis Cloud    â”‚
-              â”‚                 â”‚     Validation     â”‚
-              â”‚                 â”‚  4. Docker Build   â”‚
-              â”‚                 â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-              â”‚                           â”‚
-              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                         â”‚
-                    â”Œâ”€â”€â”€â”€â–¼â”€â”€â”€â”€â”
-                    â”‚ Success â”‚ â”€â”€â–º Ready for Deployment
-                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────────────┐
+│                         Developer Push                          │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                   ┌─────────▼─────────┐
+                   │  GitHub Actions   │
+                   │    Triggered      │
+                   └─────────┬─────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              │                             │
+    ┌─────────▼──────────┐      ┌─────────▼──────────┐
+    │   Pre-Production   │      │    Production      │
+    │   Workflow (preprod)│      │  Workflow (hazard) │
+    └─────────┬──────────┘      └─────────┬──────────┘
+              │                            │
+    ┌─────────▼──────────┐      ┌─────────▼──────────┐
+    │  1. Linting        │      │  1. All Preprod    │
+    │  2. Type Checking  │      │     Checks         │
+    │  3. Import Tests   │      │  2. Integration    │
+    │  4. Unit Tests     │      │     Tests          │
+    └─────────┬──────────┘      │  3. Redis Cloud    │
+              │                 │     Validation     │
+              │                 │  4. Docker Build   │
+              │                 └─────────┬──────────┘
+              │                           │
+              └──────────┬────────────────┘
+                         │
+                    ┌────▼────┐
+                    │ Success │ ──► Ready for Deployment
+                    └─────────┘
 ```
 
 ### Two-Stage Validation
 
 1. **Pre-Production (preprod branch)**
-
    - Fast feedback loop (~3-5 minutes)
    - Code quality checks (linting, type checking)
    - Import smoke tests
@@ -121,11 +120,11 @@ jobs:
 **Example Output:**
 
 ```
-âœ“ Linting passed (0 errors, 3 warnings)
-âœ“ Type checking passed (0 errors)
-âœ“ Import tests passed (47 modules imported successfully)
-âœ“ Unit tests passed (124 tests, 0 failures)
-âœ“ Coverage: 73.5% (target: 60%)
+✓ Linting passed (0 errors, 3 warnings)
+✓ Type checking passed (0 errors)
+✓ Import tests passed (47 modules imported successfully)
+✓ Unit tests passed (124 tests, 0 failures)
+✓ Coverage: 73.5% (target: 60%)
 ```
 
 **Duration:** ~3-5 minutes
@@ -179,13 +178,13 @@ jobs:
 **Example Output:**
 
 ```
-âœ“ Pre-production checks passed (3m 42s)
-âœ“ Integration tests passed (28 tests, 0 failures)
+✓ Pre-production checks passed (3m 42s)
+✓ Integration tests passed (28 tests, 0 failures)
   - Redis stream operations: PASS (12 tests)
   - Worker lifecycle: PASS (8 tests)
   - End-to-end workflows: PASS (8 tests)
-âœ“ Redis Cloud validation passed
-âœ“ Docker builds successful (3 images)
+✓ Redis Cloud validation passed
+✓ Docker builds successful (3 images)
 ```
 
 **Duration:** ~8-12 minutes
@@ -198,41 +197,41 @@ jobs:
 
 ```
 main (stable, deployable)
-  â””â”€â”€ hazard (production candidate)
-       â””â”€â”€ preprod (development integration)
-            â””â”€â”€ feature/* (developer branches)
+  └── hazard (production candidate)
+       └── preprod (development integration)
+            └── feature/* (developer branches)
 ```
 
 ### Branch Protection Rules
 
 **`preprod` branch:**
 
-- âœ… Require status checks to pass before merging
+- ✅ Require status checks to pass before merging
   - `quality-checks` job must succeed
-- âœ… Require pull request reviews (1 approval)
-- âœ… Require branches to be up to date before merging
-- âŒ Do not allow force pushes
-- âŒ Do not allow deletions
+- ✅ Require pull request reviews (1 approval)
+- ✅ Require branches to be up to date before merging
+- ❌ Do not allow force pushes
+- ❌ Do not allow deletions
 
 **`hazard` branch:**
 
-- âœ… Require status checks to pass before merging
+- ✅ Require status checks to pass before merging
   - `preprod-checks` job must succeed
   - `integration-tests` job must succeed
   - `docker-build` job must succeed
-- âœ… Require pull request reviews (2 approvals)
-- âœ… Require linear history
-- âœ… Require branches to be up to date before merging
-- âŒ Do not allow force pushes
-- âŒ Do not allow deletions
+- ✅ Require pull request reviews (2 approvals)
+- ✅ Require linear history
+- ✅ Require branches to be up to date before merging
+- ❌ Do not allow force pushes
+- ❌ Do not allow deletions
 
 **`main` branch:**
 
-- âœ… Require pull request from `hazard` only
-- âœ… Require 2 approvals from code owners
-- âœ… Require all status checks from `hazard` branch
-- âŒ Do not allow direct pushes
-- âŒ Do not allow force pushes
+- ✅ Require pull request from `hazard` only
+- ✅ Require 2 approvals from code owners
+- ✅ Require all status checks from `hazard` branch
+- ❌ Do not allow direct pushes
+- ❌ Do not allow force pushes
 
 ### Workflow
 
@@ -248,21 +247,21 @@ git commit -m "feat: Add new functionality"
 
 # 3. Push and create PR to preprod
 git push origin feature/add-new-functionality
-# Create PR on GitHub: feature/add-new-functionality â†’ preprod
+# Create PR on GitHub: feature/add-new-functionality → preprod
 
 # 4. CI runs pre-production checks
-# Wait for: âœ“ quality-checks
+# Wait for: ✓ quality-checks
 
 # 5. After review and merge to preprod, create PR to hazard
 git checkout hazard
 git pull origin hazard
-# Create PR on GitHub: preprod â†’ hazard
+# Create PR on GitHub: preprod → hazard
 
 # 6. CI runs integration tests
-# Wait for: âœ“ preprod-checks, âœ“ integration-tests, âœ“ docker-build
+# Wait for: ✓ preprod-checks, ✓ integration-tests, ✓ docker-build
 
 # 7. After review and merge to hazard, create PR to main
-# Create PR on GitHub: hazard â†’ main
+# Create PR on GitHub: hazard → main
 
 # 8. Deploy from main
 ```
@@ -274,18 +273,18 @@ git pull origin hazard
 ### Test Pyramid
 
 ```
-                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-                    â”‚   E2E Tests â”‚ (Few, Slow, High Value)
-                    â”‚  ~10 tests  â”‚
-                    â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜
-                  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-                  â”‚ Integration Testsâ”‚ (Some, Medium, High Value)
-                  â”‚   ~30 tests      â”‚
-                  â””â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-              â”‚     Unit Tests        â”‚ (Many, Fast, Essential)
-              â”‚    ~150+ tests        â”‚
-              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                    ┌─────────────┐
+                    │   E2E Tests │ (Few, Slow, High Value)
+                    │  ~10 tests  │
+                    └──────┬──────┘
+                  ┌────────▼────────┐
+                  │ Integration Tests│ (Some, Medium, High Value)
+                  │   ~30 tests      │
+                  └────────┬─────────┘
+              ┌───────────▼───────────┐
+              │     Unit Tests        │ (Many, Fast, Essential)
+              │    ~150+ tests        │
+              └───────────────────────┘
 ```
 
 ### Test Categories
@@ -321,8 +320,8 @@ pytest tests/unit/ -v
 
 - `test_redis_stream_operations()` - XADD, XREADGROUP, XACK
 - `test_rag_worker_lifecycle()` - Start, process, shutdown
-- `test_copywriter_end_to_end()` - Task â†’ LLM â†’ Result
-- `test_persistence_write_flow()` - Task â†’ DB â†’ Verification
+- `test_copywriter_end_to_end()` - Task → LLM → Result
+- `test_persistence_write_flow()` - Task → DB → Verification
 
 **Run Command:**
 
@@ -575,13 +574,13 @@ test-output/
 
 ### GitHub Secrets
 
-Configure in: **Settings â†’ Secrets and variables â†’ Actions**
+Configure in: **Settings → Secrets and variables → Actions**
 
 #### Required Secrets
 
 | Secret Name         | Description                     | Used In       | Example Value                    |
 | ------------------- | ------------------------------- | ------------- | -------------------------------- |
-| `REDIS_CLOUD_URL`   | Redis Cloud connection URL      | ci-hazard.yml | `redis://<REDACTED_REDIS_URL>    |
+| `REDIS_CLOUD_URL`   | Redis Cloud connection URL      | ci-hazard.yml | `redis://:pass@endpoint:port`    |
 | `OPENAI_API_KEY`    | OpenAI API key for LLM tests    | ci-hazard.yml | `sk-proj-...`                    |
 | `ANTHROPIC_API_KEY` | Anthropic API key for LLM tests | ci-hazard.yml | `sk-ant-...`                     |
 | `DATABASE_URL`      | PostgreSQL connection URL       | ci-hazard.yml | `postgresql://user:pass@host/db` |
@@ -615,8 +614,8 @@ Create `.env.test` (gitignored):
 ```bash
 # .env.test (DO NOT COMMIT)
 REDIS_URL=redis://localhost:6379
-OPENAI_API_KEY=sk-proj-test-key
-ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=your-openai-api-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
 DATABASE_URL=postgresql://localhost/agentic_test
 ```
 
@@ -663,7 +662,7 @@ RATE_LIMIT_ENABLED=false
 ENV=staging
 DEBUG=false
 LOG_LEVEL=INFO
-REDIS_URL=redis://<REDACTED_REDIS_URL>
+REDIS_URL=redis://:password@staging-redis.cloud:6379
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_PER_SECOND=100
 ```
@@ -674,7 +673,7 @@ RATE_LIMIT_PER_SECOND=100
 ENV=production
 DEBUG=false
 LOG_LEVEL=WARNING
-REDIS_URL=redis://<REDACTED_REDIS_URL>
+REDIS_URL=redis://:password@prod-redis.cloud:6379
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_PER_SECOND=50
 SECRETS_PROVIDER=azure-keyvault
@@ -709,7 +708,7 @@ Add to README.md:
     webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
     payload: |
       {
-        "text": "âŒ CI Pipeline Failed",
+        "text": "❌ CI Pipeline Failed",
         "blocks": [
           {
             "type": "section",
@@ -819,7 +818,7 @@ docker run -d -p 6379:6379 redis:7-alpine
 **Option 2: Use Redis Cloud**
 
 ```bash
-export REDIS_URL="redis://<REDACTED_REDIS_URL>"
+export REDIS_URL="redis://:password@your-redis.cloud:6379"
 pytest tests/integration/ -v
 ```
 
@@ -861,8 +860,7 @@ Error: Secret REDIS_CLOUD_URL not found
 **Solution:**
 
 1. Verify secret exists in GitHub:
-
-   - Go to: Settings â†’ Secrets and variables â†’ Actions
+   - Go to: Settings → Secrets and variables → Actions
    - Check secret name matches exactly (case-sensitive)
 
 2. Check workflow references correct secret:
@@ -907,14 +905,14 @@ pytest tests/unit/test_rate_limiter.py::test_rate_limiter_blocks_after_limit -v
 ### 2. Keep Tests Fast
 
 ```python
-# âŒ Bad: Slow test with sleeps
+# ❌ Bad: Slow test with sleeps
 def test_worker_processes_task():
     worker.start()
     time.sleep(5)  # Wait for worker
     result = redis.xread("results:stream")
     assert result is not None
 
-# âœ… Good: Fast test with mocks
+# ✅ Good: Fast test with mocks
 def test_worker_processes_task():
     with patch('redis.Redis') as mock_redis:
         mock_redis.xreadgroup.return_value = [mock_task]
@@ -925,11 +923,11 @@ def test_worker_processes_task():
 ### 3. Use Descriptive Test Names
 
 ```python
-# âŒ Bad: Unclear what's being tested
+# ❌ Bad: Unclear what's being tested
 def test_worker():
     assert worker.process() == True
 
-# âœ… Good: Clear intent and expected outcome
+# ✅ Good: Clear intent and expected outcome
 def test_rag_worker_successfully_processes_search_query_and_returns_citations():
     task = create_rag_task(query="test query")
     result = worker.process(task)
@@ -980,13 +978,13 @@ def test_stream_operations(redis_client):
 ### 6. Mock External Services
 
 ```python
-# âŒ Bad: Calls real OpenAI API (slow, costs money, flaky)
+# ❌ Bad: Calls real OpenAI API (slow, costs money, flaky)
 def test_copywriter_generates_copy():
     worker = CopywriterWorker()
     result = worker.generate_copy(task)
     assert result is not None
 
-# âœ… Good: Mocks OpenAI response
+# ✅ Good: Mocks OpenAI response
 @patch('openai.ChatCompletion.create')
 def test_copywriter_generates_copy(mock_openai):
     mock_openai.return_value = {"choices": [{"message": {"content": "Generated copy"}}]}
@@ -1180,5 +1178,3 @@ git push --force-with-lease
 **Version:** 1.0.0  
 **Last Updated:** October 29, 2025  
 **Maintained by:** Engineering Team
-
-

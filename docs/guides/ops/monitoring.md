@@ -23,6 +23,35 @@ Access dashboards:
 - **Grafana:** http://localhost:3000 (admin/admin)
 - **Prometheus:** http://localhost:9090
 
+## Component Metrics Ports
+
+Each component automatically exposes a `/metrics` and `/health` endpoint:
+
+| Tier       | Component             | Default Port |
+| ---------- | --------------------- | ------------ |
+| **Tier 1** | Manager               | 8000         |
+| **Tier 2** | Leads Orchestrator    | 8010         |
+| **Tier 2** | Outreach Orchestrator | 8011         |
+| **Tier 2** | Inbound Orchestrator  | 8012         |
+| **Tier 2** | Control Orchestrator  | 8013         |
+| **Tier 2** | Audit Orchestrator    | 8014         |
+| **Tier 3** | Persistence Agent     | 8020         |
+| **Tier 3** | RAG Agent             | 8021         |
+| **Tier 3** | Copywriter Agent      | 8022         |
+| **Tier 3** | Channel Sequencer     | 8023         |
+| **Tier 3** | Classifier Agent      | 8024         |
+| **Tier 3** | Scheduler Agent       | 8025         |
+
+### Override Ports
+
+```powershell
+# Component-specific override
+$env:METRICS_PORT_LEADS_ORCHESTRATOR = "9010"
+
+# Global fallback (all components)
+$env:METRICS_PORT = "8080"
+```
+
 ## Key Metrics
 
 ### Agent Metrics

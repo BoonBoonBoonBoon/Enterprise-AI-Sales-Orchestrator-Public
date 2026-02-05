@@ -59,6 +59,11 @@ class CampaignManager:
         # Synchronous execution path
         try:
             result = orchestrator.run(context)
+            if hasattr(orchestrator, "standardize_envelope"):
+                try:
+                    result = orchestrator.standardize_envelope(result, default_source=flow).model_dump()
+                except Exception:
+                    pass
             self.runs[run_id]['status'] = 'finished'
             self.runs[run_id]['completed_at'] = datetime.now(timezone.utc).isoformat()
             if self.allow_delivery:

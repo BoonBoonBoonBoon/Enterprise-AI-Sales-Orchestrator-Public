@@ -39,11 +39,20 @@ def redis_pubsub():
     """Provide RedisStreamsClient."""
     redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
     client = RedisStreamsClient(url=redis_url, namespace="chaos-test")
-    yield client
-    
-    # Cleanup
-    for key in client.client.scan_iter("chaos-test:*"):
-        client.client.delete(key)
+    try:
+        yield client
+    finally:
+        # Cleanup
+        for key in client.client.scan_iter("chaos-test:*"):
+            client.client.delete(key)
+        try:
+            client.client.close()
+        except Exception:
+            pass
+        try:
+            client.client.connection_pool.disconnect()
+        except Exception:
+            pass
 
 
 class ChaosInjector:

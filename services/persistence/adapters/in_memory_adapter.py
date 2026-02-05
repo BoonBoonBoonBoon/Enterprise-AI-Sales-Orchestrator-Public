@@ -53,6 +53,9 @@ class InMemoryAdapter:
 		self._counters.clear()
 
 	# Write ops ---------------------------------------------------------
+	def rpc(self, function: str, params: Optional[Dict[str, Any]] = None) -> Any:
+		raise NotImplementedError(f"RPC '{function}' not supported by InMemoryAdapter")
+
 	def write(self, table: str, record: Dict[str, Any]) -> Dict[str, Any]:
 		self._ensure(table)
 		# Preserve provided id if present; otherwise assign sequential id

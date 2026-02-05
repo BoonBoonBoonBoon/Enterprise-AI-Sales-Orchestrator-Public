@@ -19,12 +19,20 @@ def redis_client():
     
     # Verify connection
     client.ping()
-    
-    yield client
-    
-    # Cleanup test streams
-    for key in client.scan_iter("test:*"):
-        client.delete(key)
+    try:
+        yield client
+    finally:
+        # Cleanup test streams
+        for key in client.scan_iter("test:*"):
+            client.delete(key)
+        try:
+            client.close()
+        except Exception:
+            pass
+        try:
+            client.connection_pool.disconnect()
+        except Exception:
+            pass
 
 
 @pytest.mark.integration
@@ -187,16 +195,16 @@ class TestRedisConsumerGroups:
         """Test calculating consumer group lag."""
         stream = f"test:stream:{uuid.uuid4()}"
         group = "test_group"
-        
-        # Add 10 messages
-        for i in range(10):
-            redis_client.xadd(stream, {"index": str(i)})
-        
-        # Create group
+		
+        # Create group before adding messages so reads with ">" see new entries
         try:
             redis_client.xgroup_create(stream, group, id="0", mkstream=True)
         except redis.ResponseError:
             pass
+		
+        # Add 10 messages
+        for i in range(10):
+            redis_client.xadd(stream, {"index": str(i)})
         
         # Read only 5 messages
         redis_client.xreadgroup(group, "consumer", {stream: ">"}, count=5)
@@ -205,7 +213,7 @@ class TestRedisConsumerGroups:
         stream_len = redis_client.xlen(stream)
         pending = redis_client.xpending(stream, group)
         
-        # Lag = stream_len - acknowledged (10 - 0 = 10, because we read but didn't ack)
+        # Pending should reflect the 5 unacked messages we read
         assert pending['pending'] == 5
 
 

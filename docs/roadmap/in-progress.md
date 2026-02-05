@@ -6,27 +6,27 @@ Components and features currently under active development.
 
 ### Inbound Orchestrator
 
-**Status:** 🚧 In Progress  
+**Status:** ✅ Active (Jan 2026)  
 **Path:** `tiers/tier_2/inbound_orchestrator/`  
-**Target:** February 2026
+**Target:** Complete
 
-The Inbound Orchestrator handles incoming messages (emails, webhooks) that don't originate from an active campaign.
+The Inbound Orchestrator handles inbound email triage and routing, ensuring automated/low-value messages do not consume downstream resources.
 
-**Planned Functionality:**
+**Implemented Functionality:**
 
-- Classify inbound message intent (inquiry, support, spam)
-- Route to appropriate handler based on classification
-- Create staging leads for new contacts
-- Escalate to human when confidence is low
+- Tier-0 header-based pre-filter (skip obvious bounces)
+- Tier-3 Classifier Agent integration (rules-first, optional LLM fallback)
+- Action routing: route-to-leads vs store-only vs drop
+- Propagates classification metadata downstream
 
 **Current State:**
 
 - [x] Folder structure created
 - [x] README with design
-- [ ] Consumer implementation
-- [ ] Intent classifier integration
-- [ ] Routing logic
-- [ ] Tests
+- [x] Consumer implementation
+- [x] Classifier integration
+- [x] Routing logic
+- [x] Tests (targeted unit/integration coverage)
 
 ---
 
@@ -94,11 +94,18 @@ The Scheduler Agent manages delayed and scheduled task execution.
 
 ### Channel Sequencer Agent
 
-**Status:** 📋 Skeleton  
+**Status:** 🚧 In Progress  
 **Path:** `tiers/tier_3/channel_sequencer_agent/`  
 **Target:** Q1 2026
 
-The Channel Sequencer manages multi-channel outreach sequences.
+The Channel Sequencer manages outbound sequencing and delivery execution.
+
+**Implemented Functionality (MVP-safe outbound):**
+
+- Approval-mode drafts (no-send)
+- Hard-stop rules (never-send)
+- Redis-based throttles (hourly + new threads/day)
+- Outbound persistence enqueue (conversation + message) for audit/history
 
 **Planned Functionality:**
 

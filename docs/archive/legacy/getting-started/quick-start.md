@@ -1,6 +1,6 @@
-﻿# QUICK START: Testing Three-Tier Redis Streams (Option A)
+# QUICK START: Testing Three-Tier Redis Streams (Option A)
 
-## What We Built âœ…
+## What We Built ✅
 
 1. **Manager Agent Harness** (`agent/manager/manager_agent_harness.py`)
    - Wrapper for Manager Agent with retry logic, timeouts, checkpointing
@@ -14,8 +14,8 @@
    - Starts Manager + Leads + Outreach consumers in one command
 
 4. **Test Script** (`test_manager_orchestrator_flow.py`)
-   - Tests Manager â†’ Leads delegation
-   - Tests Manager â†’ Outreach delegation
+   - Tests Manager → Leads delegation
+   - Tests Manager → Outreach delegation
    - Monitors stream message counts
 
 5. **Diagnostic Tool** (`diagnostic.py`)
@@ -40,7 +40,7 @@ Wait for all three to start. Leave this running.
 python test_manager_orchestrator_flow.py
 ```
 
-Press Enter and watch the magic happen! âœ¨
+Press Enter and watch the magic happen! ✨
 
 ## What Happens in the Test
 
@@ -51,28 +51,28 @@ STEP 1: Check streams before task
   outreach:tasks: 0 messages
 
 STEP 2: Send task to manager:tasks
-  âœ… Task sent
+  ✅ Task sent
 
 STEP 3: Wait for delegation and processing
   Monitoring for 20 seconds...
   [Consumers process the task]
 
 STEP 4: Check streams after processing
-  manager:tasks: 0 â†’ 1
-  leads:tasks: 0 â†’ 1  (Manager delegated!)
-  leads:results: 0 â†’ 1 (Leads consumer completed!)
+  manager:tasks: 0 → 1
+  leads:tasks: 0 → 1  (Manager delegated!)
+  leads:results: 0 → 1 (Leads consumer completed!)
 
 STEP 5: Read results from leads:results
-  âœ… Result received
+  ✅ Result received
 ```
 
 ## Successful Test Output
 
 ```
-âœ… TEST 1 (Manager â†’ Leads):     PASSED
-âœ… TEST 2 (Manager â†’ Outreach):  PASSED
+✅ TEST 1 (Manager → Leads):     PASSED
+✅ TEST 2 (Manager → Outreach):  PASSED
 
-âœ… Three-tier flow is working!
+✅ Three-tier flow is working!
 ```
 
 ## If Tests Fail
@@ -97,7 +97,7 @@ python diagnostic.py
 ```powershell
 # Verify Redis URL
 echo $env:REDIS_URL
-# Should show: redis://<REDACTED_REDIS_URL>
+# Should show: redis://default:***@redis-15143...
 
 # Or use local Redis
 python verify_redis_streams.py
@@ -108,15 +108,15 @@ python verify_redis_streams.py
 If tests pass, you've confirmed:
 
 ```
-âœ… Tier 1: Manager (external entry point)
+✅ Tier 1: Manager (external entry point)
   - manager:tasks (receives requests)
   - manager:results (publishes final results)
 
-âœ… Tier 2: Orchestrators (business logic)
+✅ Tier 2: Orchestrators (business logic)
   - leads:tasks/results (working)
   - outreach:tasks/results (working)
 
-â³ Tier 3: Agents (capabilities)
+⏳ Tier 3: Agents (capabilities)
   - NOT TESTED YET (need to build 6 consumers)
 ```
 
@@ -190,5 +190,4 @@ For more details, see: `TEST_OPTION_A_GUIDE.md`
 
 ---
 
-**Status:** Ready to test! All prerequisites met âœ…
-
+**Status:** Ready to test! All prerequisites met ✅

@@ -20,43 +20,46 @@ The envelope provides:
 
 ## Envelope Types
 
-### TaskEnvelope
+### Envelope (Task)
 
 Sent when requesting work:
 
 ```json
 {
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "tenant_id": "agentic-dev",
+  "metadata": {
+    "message_id": "a1b2c3d4-e29b-41d4-a716-446655440000",
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "tenant_id": "agentic-dev",
+    "source": "leads_orchestrator",
+    "destination": "rag_agent",
+    "correlation_id": "flow-abc-123",
+    "created_at": "2026-01-13T10:30:00Z"
+  },
   "payload": {
     "action": "get_lead_context",
     "lead_id": "lead-123"
   },
-  "metadata": {
-    "source": "leads_orchestrator",
-    "target": "rag_agent",
-    "correlation_id": "flow-abc-123",
-    "timestamp": "2026-01-13T10:30:00Z"
-  }
+  "status": "pending"
 }
 ```
 
-### ResultEnvelope
+### Envelope (Result)
 
 Returned after processing:
 
 ```json
 {
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "tenant_id": "agentic-dev",
+  "metadata": {
+    "message_id": "b2c3d4e5-e29b-41d4-a716-446655440000",
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "tenant_id": "agentic-dev",
+    "source": "rag_agent",
+    "created_at": "2026-01-13T10:30:05Z"
+  },
   "status": "success",
-  "result": {
+  "payload": {
     "lead_context": {...},
     "completeness_score": 0.85
-  },
-  "metadata": {
-    "source": "rag_agent",
-    "timestamp": "2026-01-13T10:30:05Z"
   }
 }
 ```
@@ -67,23 +70,23 @@ Returned after processing:
 ┌─────────────────────────────────────────────────────────┐
 │                     ENVELOPE                            │
 ├─────────────────────────────────────────────────────────┤
-│  task_id       │  Unique identifier (UUID)              │
-│                │  Links request → response               │
-├────────────────┼────────────────────────────────────────┤
-│  tenant_id     │  Tenant scope                          │
-│                │  Determines stream prefix               │
-├────────────────┼────────────────────────────────────────┤
-│  payload       │  Task-specific data                    │
-│                │  Structure varies by action            │
-├────────────────┼────────────────────────────────────────┤
-│  metadata      │  Routing & tracing info                │
-│                │  source, target, correlation_id        │
+│  metadata.task_id  │  Unique identifier (UUID)          │
+│                    │  Links request → response           │
+├────────────────────┼────────────────────────────────────┤
+│  metadata.tenant_id│  Tenant scope (optional)            │
+│                    │  Determines stream prefix           │
+├────────────────────┼────────────────────────────────────┤
+│  payload           │  Task-specific data                 │
+│                    │  Structure varies by action         │
+├────────────────────┼────────────────────────────────────┤
+│  metadata          │  Routing & tracing info             │
+│                    │  source, destination, correlation   │
 └────────────────┴────────────────────────────────────────┘
 ```
 
 ## Key Fields
 
-### task_id
+### metadata.task_id
 
 - **Type:** UUID string
 - **Purpose:** Unique task identifier
@@ -96,7 +99,7 @@ task_id = str(uuid.uuid4())
 # "550e8400-e29b-41d4-a716-446655440000"
 ```
 
-### tenant_id
+### metadata.tenant_id
 
 - **Type:** String
 - **Purpose:** Multi-tenant isolation
@@ -131,9 +134,9 @@ Routing and observability information:
 | Field            | Purpose                           |
 | ---------------- | --------------------------------- |
 | `source`         | Component that created the task   |
-| `target`         | Intended recipient (optional)     |
+| `destination`    | Intended recipient (optional)     |
 | `correlation_id` | Links related tasks in a workflow |
-| `timestamp`      | When created                      |
+| `created_at`     | When created                      |
 | `debug`          | Debug info (e.g., llm_summary)    |
 
 ## Flow Example
@@ -141,31 +144,31 @@ Routing and observability information:
 ```
 1. Manager creates task
    ┌─────────────────────────────────────────┐
-   │ task_id: "abc-123"                      │
-   │ tenant_id: "agentic-dev"                │
-   │ payload: {action: "process_inbound"}    │
-   │ metadata: {source: "manager"}           │
+  │ metadata.task_id: "abc-123"             │
+  │ metadata.tenant_id: "agentic-dev"       │
+  │ payload: {action: "process_inbound"}    │
+  │ metadata: {source: "manager"}           │
    └─────────────────────────────────────────┘
                     │
                     ▼
 2. Orchestrator creates sub-task (same correlation_id)
    ┌─────────────────────────────────────────┐
-   │ task_id: "def-456"                      │
-   │ tenant_id: "agentic-dev"                │
-   │ payload: {action: "get_lead_context"}   │
-   │ metadata: {                             │
-   │   source: "leads_orchestrator",         │
-   │   correlation_id: "abc-123"   ◄─────────│── Links to original
-   │ }                                       │
+  │ metadata.task_id: "def-456"             │
+  │ metadata.tenant_id: "agentic-dev"       │
+  │ payload: {action: "get_lead_context"}   │
+  │ metadata: {                             │
+  │   source: "leads_orchestrator",         │
+  │   correlation_id: "abc-123"   ◄─────────│── Links to original
+  │ }                                       │
    └─────────────────────────────────────────┘
                     │
                     ▼
 3. Agent returns result
    ┌─────────────────────────────────────────┐
-   │ task_id: "def-456"          ◄───────────│── Matches request
-   │ status: "success"                       │
-   │ result: {lead_context: {...}}           │
-   │ metadata: {source: "rag_agent"}         │
+  │ metadata.task_id: "def-456" ◄───────────│── Matches request
+  │ status: "success"                       │
+  │ payload: {lead_context: {...}}          │
+  │ metadata: {source: "rag_agent"}         │
    └─────────────────────────────────────────┘
 ```
 
@@ -186,11 +189,10 @@ class Metadata(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     debug: Optional[dict] = None
 
-class TaskEnvelope(BaseModel):
-    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    tenant_id: str
-    payload: dict
-    metadata: Metadata = Field(default_factory=Metadata)
+class Envelope(BaseModel):
+  metadata: Metadata
+  payload: dict
+  status: str = "pending"
 ```
 
 ### ResultEnvelope
@@ -198,13 +200,11 @@ class TaskEnvelope(BaseModel):
 ```python
 from typing import Literal
 
-class ResultEnvelope(BaseModel):
-    task_id: str
-    tenant_id: str
-    status: Literal["success", "error", "pending"]
-    result: Optional[dict] = None
-    error: Optional[dict] = None
-    metadata: Metadata = Field(default_factory=Metadata)
+class Envelope(BaseModel):
+  metadata: Metadata
+  payload: Optional[dict] = None
+  status: str = "pending"
+  error: Optional[str] = None
 ```
 
 ## Error Envelope
@@ -213,15 +213,16 @@ When tasks fail:
 
 ```json
 {
-  "task_id": "abc-123",
-  "tenant_id": "agentic-dev",
+  "metadata": {
+    "task_id": "abc-123",
+    "tenant_id": "agentic-dev",
+    "source": "rag_agent"
+  },
   "status": "error",
-  "error": {
-    "code": "LEAD_NOT_FOUND",
-    "message": "Lead 'xyz' not found in any table",
-    "details": {
-      "searched_tables": ["leads", "staging_leads"]
-    },
+  "error": "Lead 'xyz' not found in any table",
+  "error_code": "LEAD_NOT_FOUND",
+  "payload": {
+    "searched_tables": ["leads", "staging_leads"],
     "retryable": false
   }
 }
@@ -229,12 +230,11 @@ When tasks fail:
 
 ### Error Fields
 
-| Field       | Description                 |
-| ----------- | --------------------------- |
-| `code`      | Machine-readable error code |
-| `message`   | Human-readable description  |
-| `details`   | Additional context          |
-| `retryable` | Can this be retried?        |
+| Field        | Description                 |
+| ------------ | --------------------------- |
+| `error_code` | Machine-readable error code |
+| `error`      | Human-readable description  |
+| `payload`    | Additional context          |
 
 ## Best Practices
 

@@ -1,4 +1,4 @@
-﻿# Developer README
+# Developer README
 
 This document serves as a TODO list, a guide to the system's architecture, and a learning resource for developers working on the Agentic System. It explains the purpose of implemented features, ongoing tasks, and theories behind the design.
 
@@ -70,7 +70,7 @@ This document serves as a TODO list, a guide to the system's architecture, and a
     "records": [
       {
         "id": "fd6bc6b5-e2e8-449d-93f9-2d1b6c9ac8a1",
-        "email": "wez.mock@example-test.com",
+        "email": "wez@gmail.com",
         "company": "WM company",
         "first_name": "wez",
         "last_name": "mud",
@@ -176,7 +176,7 @@ Copywriter agent (skeleton)
    Use `agent/operational_agents/copywriter/worker.py`.
 
 Reliability/ops
-- Health script: already shows heartbeats and DLQ. Add a short â€œtop streams by lengthâ€ if desired.
+- Health script: already shows heartbeats and DLQ. Add a short “top streams by length” if desired.
 - DLQ lifecycle: keep using dlq_requeue with --transform-upsert for 23505 cases.
 
 CI and branches

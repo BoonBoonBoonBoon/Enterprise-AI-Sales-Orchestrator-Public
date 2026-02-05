@@ -1,4 +1,4 @@
-﻿# Persistence & Copywriter Agents Architecture Update
+# Persistence & Copywriter Agents Architecture Update
 
 **Date**: 2024  
 **Status**: Complete  
@@ -20,10 +20,10 @@ Both agents now follow this three-layer architecture:
 
 ```
 {agent_name}/
-â”œâ”€â”€ {agent_name}_agent_new.py     # Deep Agent with LangChain tools
-â”œâ”€â”€ {agent_name}_harness.py       # Harness wrapper (reliability layer)
-â”œâ”€â”€ consumer.py                    # Redis Streams consumer (XREADGROUP)
-â””â”€â”€ __init__.py
+├── {agent_name}_agent_new.py     # Deep Agent with LangChain tools
+├── {agent_name}_harness.py       # Harness wrapper (reliability layer)
+├── consumer.py                    # Redis Streams consumer (XREADGROUP)
+└── __init__.py
 ```
 
 ## Hierarchical Stream Naming
@@ -66,7 +66,7 @@ Both agents now follow this three-layer architecture:
 **File**: `agent/operational_agents/persistence_agent/persistence_agent_harness.py`
 
 **Features**:
-- Automatic retry with exponential backoff (1s â†’ 2s â†’ 4s â†’ 60s max)
+- Automatic retry with exponential backoff (1s → 2s → 4s → 60s max)
 - Structured logging with request IDs
 - Execution time tracking
 - Error rate metrics
@@ -217,18 +217,18 @@ python test_persistence_copywriter.py
 
 **Expected Output**:
 ```
-âœ… PASS - Persistence Write
-âœ… PASS - Persistence Batch
-âœ… PASS - Copywriter Email
-âœ… PASS - Copywriter SMS
+✅ PASS - Persistence Write
+✅ PASS - Persistence Batch
+✅ PASS - Copywriter Email
+✅ PASS - Copywriter SMS
 
 4/4 tests passed
-ðŸŽ‰ All tests passed!
+🎉 All tests passed!
 ```
 
 ## Integration with Orchestrators
 
-### Leads Orchestrator â†’ Persistence
+### Leads Orchestrator → Persistence
 ```python
 # Leads orchestrator already delegates to Persistence
 stream = f"{tenant_id}:agents:persistence:tasks"
@@ -246,7 +246,7 @@ envelope = task(
 redis_client.xadd(stream, envelope.to_redis_fields())
 ```
 
-### Outreach Orchestrator â†’ Copywriter
+### Outreach Orchestrator → Copywriter
 ```python
 # Outreach orchestrator already delegates to Copywriter
 stream = f"{tenant_id}:agents:copywriter:tasks"
@@ -280,7 +280,7 @@ redis_client.xadd(stream, envelope.to_redis_fields())
 ### Environment Variables
 ```bash
 # Redis Configuration
-REDIS_HOST=your-redis-host.redns.redis-cloud.com
+REDIS_HOST=redis-16287.c323.us-east-1-2.ec2.redns.redis-cloud.com
 REDIS_PORT=16287
 REDIS_PASSWORD=xgtSCFMWg0cGCAJVqNJjUZOsEJDKnVnT
 
@@ -525,14 +525,14 @@ All agents log structured JSON with:
 
 Both Persistence and Copywriter agents are now fully aligned with the production architecture:
 
-âœ… **Deep Agents** - LangGraph-based with structured tools  
-âœ… **Agent Harness** - Retry, observability, checkpointing  
-âœ… **Redis Streams Consumer** - XREADGROUP pattern  
-âœ… **Hierarchical Naming** - `{tenant}:agents:{name}:tasks/results`  
-âœ… **Typed Envelopes** - Global standardized message format  
-âœ… **Docker Deployment** - Production-ready containers  
-âœ… **Testing** - Comprehensive test suite  
-âœ… **Documentation** - Complete implementation guide  
+✅ **Deep Agents** - LangGraph-based with structured tools  
+✅ **Agent Harness** - Retry, observability, checkpointing  
+✅ **Redis Streams Consumer** - XREADGROUP pattern  
+✅ **Hierarchical Naming** - `{tenant}:agents:{name}:tasks/results`  
+✅ **Typed Envelopes** - Global standardized message format  
+✅ **Docker Deployment** - Production-ready containers  
+✅ **Testing** - Comprehensive test suite  
+✅ **Documentation** - Complete implementation guide  
 
 **Next Steps**:
 1. Run `test_persistence_copywriter.py` to verify functionality
@@ -541,5 +541,4 @@ Both Persistence and Copywriter agents are now fully aligned with the production
 4. Test end-to-end delegation chains
 5. Scale workers as needed
 
-**Status**: Ready for production deployment âœ¨
-
+**Status**: Ready for production deployment ✨

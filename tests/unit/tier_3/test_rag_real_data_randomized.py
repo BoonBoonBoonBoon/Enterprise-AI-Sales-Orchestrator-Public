@@ -1,4 +1,4 @@
-﻿import os
+import os
 import random
 import pytest
 from datetime import datetime, timezone
@@ -19,7 +19,7 @@ LEAD_BILL = {
     "id": "23fe054a-1823-4d37-9218-527beac9b0b1",
     "client_id": "3111512b-dc2b-4c3f-8153-2bc0b3e0761f",
     "campaign_id": "9646f98a-e987-4a8c-b786-9b82ea985d38",
-    "email": "bill.mock@example-test.com",
+    "email": "bill@gmail.com",
     "first_name": "bill",
     "last_name": "bob",
     "company_name": "bb builders",
@@ -52,7 +52,7 @@ LEAD_EM = {
     "id": "b9722cc0-18ad-45c2-9a6e-ae0ce068d33d",
     "client_id": "592c9b4c-77be-4303-ad46-1ffb1ede127e",
     "campaign_id": "9646f98a-e987-4a8c-b786-9b82ea985d38",
-    "email": "Test.mock@example-test.com",
+    "email": "Test@gmail.com",
     "first_name": "em",
     "last_name": "em",
     "company_name": "em",
@@ -63,7 +63,7 @@ LEAD_WEZ = {
     "id": "fd6bc6b5-e2e8-449d-93f9-2d1b6c9ac8a1",
     "client_id": "4ecd445c-1ff8-44a3-8a0c-404e7c69f031",
     "campaign_id": "9646f98a-e987-4a8c-b786-9b82ea985d38",
-    "email": "wez.mock@example-test.com",
+    "email": "wez@gmail.com",
     "first_name": "wez",
     "last_name": "mud",
     "company_name": "WM company",
@@ -162,4 +162,3 @@ def test_randomized_multiple_queries(rag_agent_real_like):
         assert env["metadata"]["total_count"] >= 1
         seen += 1
     assert seen == 5
-

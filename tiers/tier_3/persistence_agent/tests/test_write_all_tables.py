@@ -1,11 +1,14 @@
 """
-One-time write test for all 4 core Supabase tables.
+One-time write test for all core Supabase tables.
 
 Tests Persistence Agent's write capabilities across:
-- staging_leads (4 records via batch)
+- staging_leads (4 records via individual creates)
 - leads (4 records via individual creates)
-- conversations (4 records linked to leads)
-- messages (6 records linked to conversations)
+- conversations (1 per lead)
+- messages (1 per conversation)
+
+Also includes staging_conversations + staging_messages (1 per staging lead) using service-role
+Supabase client to ensure the UI data model is covered in tests.
 
 Run with: pytest tiers/tier_3/persistence_agent/tests/test_write_all_tables.py -v -s
 """
@@ -163,10 +166,10 @@ class TestWriteAllTables:
         tenant_id: str,
         test_timestamp: str,
         client_id: str
-    ):
-        """Test 1: Write 4 staging leads via batch operation."""
+    ) -> List[str]:
+        """Test 1: Write 4 staging leads via individual creates (capture IDs)."""
         print("\n" + "="*60)
-        print("TEST 1: Writing 4 staging_leads (batch)")
+        print("TEST 1: Writing 4 staging_leads (individual)")
         print("="*60)
         
         # Mock staging leads data
@@ -220,18 +223,82 @@ class TestWriteAllTables:
             }
         ]
         
-        # Send to Persistence Agent
-        result = await self._send_persistence_task(
-            redis_client=redis_client,
-            tenant_id=tenant_id,
-            goal="Batch create staging leads from test data",
-            context={"leads": staging_leads}
+        staging_ids = []
+        for i, lead_data in enumerate(staging_leads, 1):
+            print(f"\n📝 Creating staging lead {i}/4: {lead_data['email']}")
+            result = await self._send_persistence_task(
+                redis_client=redis_client,
+                tenant_id=tenant_id,
+                goal=f"Create staging lead for {lead_data['email']}",
+                context=lead_data,
+            )
+            print(f"\n📊 Result: {result}")
+            assert result.get("status") == "success"
+            staging_id = result.get("id")
+            staging_ids.append(staging_id)
+            print(f"✅ Created staging lead with ID: {staging_id}")
+
+        print(f"✅ Created {len(staging_ids)} staging leads")
+        return staging_ids
+
+    @pytest.mark.asyncio
+    async def test_write_staging_conversations_and_messages(
+        self,
+        supabase_client: Client,
+        redis_client: aioredis.Redis,
+        tenant_id: str,
+        test_timestamp: str,
+        client_id: str
+    ) -> List[str]:
+        """Test 1b: Write 1 staging_conversation + 1 staging_message per staging lead."""
+        print("\n" + "="*60)
+        print("TEST 1b: Writing staging_conversations + staging_messages")
+        print("="*60)
+
+        staging_lead_ids = await self.test_write_staging_leads(
+            redis_client, tenant_id, test_timestamp, client_id
         )
-        
-        print(f"\n📊 Result: {result}")
-        assert result.get("status") == "success"
-        assert result.get("created_count") == 4
-        print(f"✅ Created {result['created_count']} staging leads")
+
+        now = datetime.now().isoformat()
+        staging_convos = []
+        for idx, staging_lead_id in enumerate(staging_lead_ids, 1):
+            staging_convos.append(
+                {
+                    "staging_lead_id": staging_lead_id,
+                    "status": "active",
+                    "metadata": {"seed": True, "test": True},
+                    "subject": f"Staging convo {idx} - {test_timestamp}",
+                    "thread_id": f"stg-thread-{test_timestamp}-{idx}",
+                    "channel": "email",
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+
+        convo_result = supabase_client.table("staging_conversations").insert(staging_convos).execute()
+        staging_conversation_ids = [row["id"] for row in convo_result.data]
+        print(f"✅ Created {len(staging_conversation_ids)} staging_conversations")
+
+        staging_messages = []
+        for idx, convo_id in enumerate(staging_conversation_ids, 1):
+            staging_messages.append(
+                {
+                    "staging_conversation_id": convo_id,
+                    "sender": "lead",
+                    "receiver": "agent",
+                    "content": f"Staging message {idx} - {test_timestamp}",
+                    "sent_at": now,
+                    "metadata": {"seed": True, "test": True},
+                    "created_at": now,
+                    "updated_at": now,
+                    "message_id": f"stg-msg-{test_timestamp}-{idx}",
+                }
+            )
+
+        msg_result = supabase_client.table("staging_messages").insert(staging_messages).execute()
+        print(f"✅ Created {len(msg_result.data)} staging_messages")
+
+        return staging_conversation_ids
     
     @pytest.mark.asyncio
     async def test_write_leads(
@@ -328,9 +395,9 @@ class TestWriteAllTables:
         test_timestamp: str,
         client_id: str
     ) -> List[str]:
-        """Test 3: Write 4 conversations linked to leads."""
+        """Test 3: Write 1 conversation per lead."""
         print("\n" + "="*60)
-        print("TEST 3: Writing 4 conversations (linked to leads)")
+        print("TEST 3: Writing conversations (1 per lead)")
         print("="*60)
         
         # First create leads to get IDs
@@ -340,33 +407,13 @@ class TestWriteAllTables:
         
         conversations_data = [
             {
-                "lead_id": lead_ids[0],
-                "subject": "Partnership Inquiry - Acme Corp",
-                "channel": "email",
-                "status": "active",
-                "client_id": client_id
-            },
-            {
-                "lead_id": lead_ids[1],
-                "subject": "Product Demo Request - Beta Technologies",
-                "channel": "email",
-                "status": "active",
-                "client_id": client_id
-            },
-            {
-                "lead_id": lead_ids[2],
-                "subject": "Pricing Questions - Gamma Solutions",
-                "channel": "email",
-                "status": "closed",
-                "client_id": client_id
-            },
-            {
-                "lead_id": lead_ids[3],
-                "subject": "Enterprise Pilot Program - Delta",
+                "lead_id": lead_id,
+                "subject": f"Lead conversation {idx} - {test_timestamp}",
                 "channel": "email",
                 "status": "active",
                 "client_id": client_id
             }
+            for idx, lead_id in enumerate(lead_ids, 1)
         ]
         
         conversation_ids = []
@@ -386,7 +433,7 @@ class TestWriteAllTables:
             conversation_ids.append(conv_id)
             print(f"✅ Created conversation with ID: {conv_id}")
         
-        print(f"\n✅ Created all 4 conversations: {conversation_ids}")
+        print(f"\n✅ Created {len(conversation_ids)} conversations: {conversation_ids}")
         return conversation_ids
     
     @pytest.mark.asyncio
@@ -397,9 +444,9 @@ class TestWriteAllTables:
         test_timestamp: str,
         client_id: str
     ):
-        """Test 4: Write 6 messages linked to conversations."""
+        """Test 4: Write 1 message per conversation."""
         print("\n" + "="*60)
-        print("TEST 4: Writing 6 messages (linked to conversations)")
+        print("TEST 4: Writing messages (1 per conversation)")
         print("="*60)
         
         # First create conversations to get IDs
@@ -409,47 +456,13 @@ class TestWriteAllTables:
         
         messages_data = [
             {
-                "conversation_id": conversation_ids[0],
+                "conversation_id": convo_id,
                 "direction": "outbound",
-                "content": "Hi John, I wanted to reach out about a potential partnership between our companies...",
+                "content": f"Test message for conversation {idx} - {test_timestamp}",
                 "sender_type": "agent",
                 "sentiment_score": 0.0
-            },
-            {
-                "conversation_id": conversation_ids[0],
-                "direction": "inbound",
-                "content": "Thanks for reaching out! I'm very interested in learning more. When can we schedule a call?",
-                "sender_type": "lead",
-                "sentiment_score": 0.8
-            },
-            {
-                "conversation_id": conversation_ids[1],
-                "direction": "outbound",
-                "content": "Hi Jane, I'd love to show you a demo of our product. Are you available next Tuesday?",
-                "sender_type": "agent",
-                "sentiment_score": 0.0
-            },
-            {
-                "conversation_id": conversation_ids[1],
-                "direction": "inbound",
-                "content": "Tuesday works for me. Looking forward to it!",
-                "sender_type": "lead",
-                "sentiment_score": 0.5
-            },
-            {
-                "conversation_id": conversation_ids[2],
-                "direction": "outbound",
-                "content": "Hi Mike, here's our pricing structure for the solutions you inquired about...",
-                "sender_type": "agent",
-                "sentiment_score": 0.0
-            },
-            {
-                "conversation_id": conversation_ids[3],
-                "direction": "inbound",
-                "content": "We're not interested at this time. Please remove us from your list.",
-                "sender_type": "lead",
-                "sentiment_score": -0.7
             }
+            for idx, convo_id in enumerate(conversation_ids, 1)
         ]
         
         message_ids = []
@@ -457,7 +470,7 @@ class TestWriteAllTables:
         for i, msg_data in enumerate(messages_data, 1):
             direction = msg_data['direction']
             preview = msg_data['content'][:50] + "..."
-            print(f"\n📝 Creating message {i}/6 ({direction}): {preview}")
+            print(f"\n📝 Creating message {i}/{len(messages_data)} ({direction}): {preview}")
             
             result = await self._send_persistence_task(
                 redis_client=redis_client,
@@ -471,7 +484,7 @@ class TestWriteAllTables:
             message_ids.append(msg_id)
             print(f"✅ Created message with ID: {msg_id}")
         
-        print(f"\n✅ Created all 6 messages: {message_ids}")
+        print(f"\n✅ Created {len(message_ids)} messages: {message_ids}")
         return message_ids
     
     @pytest.mark.asyncio
@@ -480,7 +493,8 @@ class TestWriteAllTables:
         redis_client: aioredis.Redis,
         tenant_id: str,
         test_timestamp: str,
-        client_id: str
+        client_id: str,
+        supabase_client: Client
     ):
         """
         Master test: Run all 4 write operations in sequence.
@@ -495,9 +509,9 @@ class TestWriteAllTables:
         print("MASTER TEST: Full Write Workflow (All 4 Tables)")
         print("="*80)
         
-        # Step 1: Staging leads
-        await self.test_write_staging_leads(
-            redis_client, tenant_id, test_timestamp, client_id
+        # Step 1: Staging leads + staging conversations/messages
+        staging_conversation_ids = await self.test_write_staging_conversations_and_messages(
+            supabase_client, redis_client, tenant_id, test_timestamp, client_id
         )
         
         # Step 2: Leads
@@ -520,6 +534,8 @@ class TestWriteAllTables:
         print("="*80)
         print(f"📊 Summary:")
         print(f"  - Staging Leads: 4 created")
+        print(f"  - Staging Conversations: {len(staging_conversation_ids)} created")
+        print(f"  - Staging Messages: {len(staging_conversation_ids)} created")
         print(f"  - Leads: {len(lead_ids)} created")
         print(f"  - Conversations: {len(conversation_ids)} created")
         print(f"  - Messages: {len(message_ids)} created")
@@ -545,10 +561,22 @@ class TestWriteAllTables:
         print(f"    SELECT id FROM leads WHERE email LIKE '%{test_timestamp}%'")
         print(f"  )")
         print(f");")
+        print(f"\n-- Delete staging_messages")
+        print(f"DELETE FROM staging_messages")
+        print(f"WHERE staging_conversation_id IN (")
+        print(f"  SELECT id FROM staging_conversations WHERE staging_lead_id IN (")
+        print(f"    SELECT id FROM staging_leads WHERE email LIKE '%{test_timestamp}%'")
+        print(f"  )")
+        print(f");")
         print(f"\n-- Delete conversations")
         print(f"DELETE FROM conversations")
         print(f"WHERE lead_id IN (")
         print(f"  SELECT id FROM leads WHERE email LIKE '%{test_timestamp}%'")
+        print(f");")
+        print(f"\n-- Delete staging_conversations")
+        print(f"DELETE FROM staging_conversations")
+        print(f"WHERE staging_lead_id IN (")
+        print(f"  SELECT id FROM staging_leads WHERE email LIKE '%{test_timestamp}%'")
         print(f");")
         print(f"\n-- Delete leads")
         print(f"DELETE FROM leads WHERE email LIKE '%{test_timestamp}%';")
@@ -579,9 +607,17 @@ if __name__ == "__main__":
         test_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         client_id = "00000000-0000-0000-0000-000000000001"  # Update with real client_id
         
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
+
+        if not supabase_url or not supabase_key:
+            raise SystemExit("SUPABASE_URL and SUPABASE_SERVICE_KEY/SUPABASE_KEY are required for staging tests")
+
+        supabase_client = create_client(supabase_url, supabase_key)
+
         try:
             await test.test_full_workflow(
-                redis_client, tenant_id, test_timestamp, client_id
+                redis_client, tenant_id, test_timestamp, client_id, supabase_client
             )
             test.test_cleanup_instructions(test_timestamp)
         finally:

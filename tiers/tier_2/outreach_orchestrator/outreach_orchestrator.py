@@ -24,6 +24,7 @@ from langchain.tools import tool
 from deepagents import create_deep_agent
 from core.envelope import task as create_task_envelope, to_redis_fields
 from core.streams import assert_agents_stream
+from core.security.prompt_hardening import get_hardened_internal_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class OutreachOrchestrator:
     
     def _get_system_prompt(self) -> str:
         """System prompt defining Outreach Orchestrator role and decision framework"""
-        return f"""You are the Outreach Orchestrator - a Tier 2 autonomous agent in a 3-tier event-driven system.
+        base_prompt = f"""You are the Outreach Orchestrator - a Tier 2 autonomous agent in a 3-tier event-driven system.
 
 ## SYSTEM ARCHITECTURE
 - **Tier 1 (Manager)**: Assigns you goals via Redis Streams. You report results back.
@@ -178,6 +179,7 @@ You are an AUTONOMOUS EXECUTOR, not an assistant. You:
 - Copywriter handles ALL content generation (emails, subject lines, LinkedIn messages)
 
 You receive tasks from Manager (Tier 1). Execute autonomously and return results. Never wait for approval."""
+        return get_hardened_internal_prompt(base_prompt)
     
     def _build_tools(self) -> List:
         """Build all tools (deterministic + delegation)"""
@@ -201,16 +203,46 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
         """Enqueue a copywriting request to the Copywriter agent stream."""
         task_id = f"copy-{uuid.uuid4()}"
 
+        channel = copy_request.get("channel", "email")
+        copy_type = "sms" if str(channel).lower() == "sms" else "email"
+
+        # Build context with sender_config injected
+        context = copy_request.get("context", {})
+        if isinstance(context, dict):
+            # Inject sender config from copy_request or environment variables
+            sender_config = context.get("sender_config") or {}
+            if not sender_config.get("sender_name"):
+                sender_config["sender_name"] = (
+                    copy_request.get("from_name") or
+                    copy_request.get("sender_name") or
+                    os.getenv("SENDER_NAME", "")
+                )
+            if not sender_config.get("sender_company"):
+                sender_config["sender_company"] = (
+                    copy_request.get("sender_company") or
+                    copy_request.get("company_name") or
+                    os.getenv("SENDER_COMPANY", "")
+                )
+            if not sender_config.get("sender_email"):
+                sender_config["sender_email"] = (
+                    copy_request.get("from_email") or
+                    copy_request.get("sender_email") or
+                    os.getenv("SENDER_EMAIL", "")
+                )
+            context["sender_config"] = sender_config
+
         payload = {
             "tenant_id": self.tenant_id,
             "campaign_id": copy_request.get("campaign_id", ""),
             "lead_id": copy_request.get("lead_id", ""),
             # CopywriterAgent expects `type` (email/sms). Keep `channel` for downstream correlation.
-            "type": copy_request.get("channel", "email"),
-            "channel": copy_request.get("channel", "email"),
+            "type": copy_type,
+            "channel": channel,
+            # Preserve higher-level intent (e.g., reply/cold_email) for debugging.
+            "request_type": copy_request.get("type"),
             "tone": copy_request.get("tone", "professional"),
             "goal": copy_request.get("goal", "book_meeting"),
-            "context": copy_request.get("context", {}),
+            "context": context,
             "operation": "generate_copy",
             "delegated_by": "outreach_orchestrator",
             "timestamp": datetime.utcnow().isoformat(),
@@ -418,7 +450,7 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                 "reply_packet": reply_packet,
             }
 
-            self.redis.client.hset(self._auto_send_hash, copy_task_id, json.dumps(payload))
+            self.redis.hset(self._auto_send_hash, copy_task_id, json.dumps(payload))
             _trace_log(
                 "outreach",
                 correlation_id=copy_task_id,
@@ -832,11 +864,24 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
         if isinstance(task_data, dict):
             inner_payload = task_data.get("payload") if isinstance(task_data.get("payload"), dict) else {}
             delegations = inner_payload.get("delegations") if isinstance(inner_payload, dict) else None
-            reply_packet = inner_payload.get("reply_packet") if isinstance(inner_payload, dict) else task_data.get("reply_packet")
+
+            # Prefer reply_packet embedded in payload, but fall back to top-level for
+            # callers that pass it directly (common in deep reply chaining).
+            reply_packet = (
+                inner_payload.get("reply_packet")
+                if isinstance(inner_payload.get("reply_packet"), dict)
+                else task_data.get("reply_packet")
+            )
 
             # If Manager chained a reply_packet, delegate directly to Copywriter.
             if isinstance(reply_packet, dict):
-                auto_send = bool(inner_payload.get("auto_send") or task_data.get("auto_send") or True)
+                # Default to True, but respect explicit False when provided.
+                if "auto_send" in inner_payload:
+                    auto_send = bool(inner_payload.get("auto_send"))
+                elif "auto_send" in task_data:
+                    auto_send = bool(task_data.get("auto_send"))
+                else:
+                    auto_send = True
                 copy_req = {
                     "channel": "email",
                     "type": "reply",

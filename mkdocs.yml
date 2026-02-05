@@ -4,16 +4,16 @@
 site_name: Agentic System
 site_description: Enterprise-grade AI Agent Orchestration Platform
 site_author: Elliot
-site_url: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
+site_url: https://boonboonboonboon.github.io/Agentic-System/
 
-# Reduce warning noise from README/index conflicts.
-# Note: `docs/archive/**` is included so archived reference pages are published.
-# If you want to hide the legacy archive from the public site, remove the
-# following 'archive' entries from the `nav` or move them under a private folder.
+# Reduce warning noise from legacy/archived docs and avoid README/index conflicts.
+exclude_docs: |
+  ./README.md
+  archive/**
 
 # Repository
-repo_name: BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
-repo_url: https://github.com/BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
+repo_name: BoonBoonBoonBoon/Agentic-System
+repo_url: https://github.com/BoonBoonBoonBoon/Agentic-System
 
 # Theme
 theme:
@@ -89,7 +89,7 @@ markdown_extensions:
   - pymdownx.magiclink:
       repo_url_shorthand: true
       user: BoonBoonBoonBoon
-      repo: Enterprise-AI-Sales-Orchestrator-Public
+      repo: Agentic-System
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.superfences:
@@ -135,11 +135,14 @@ nav:
       - Leads Orchestrator: components/tier-2/leads.md
       - Outreach Orchestrator: components/tier-2/outreach.md
       - Inbound Orchestrator: components/tier-2/inbound.md
+      - Audit Orchestrator: components/tier-2/audit.md
     - Tier 3 - Agents:
       - components/tier-3/index.md
       - RAG Agent: components/tier-3/rag.md
       - Persistence Agent: components/tier-3/persistence.md
       - Copywriter Agent: components/tier-3/copywriter.md
+      - Classifier Agent: components/tier-3/classifier.md
+      - Channel Sequencer Agent: components/tier-3/channel-sequencer.md
     - Services:
       - components/services/index.md
       - Redis Service: components/services/redis.md
@@ -149,24 +152,36 @@ nav:
   
   - Guides:
     - guides/index.md
+    - Staging & Deduplication: guides/staging-deduplication.md
+    - Pricing & Competitive Research: guides/pricing-and-competitive-research.md
+    - MVP Strengthening Checklist: guides/mvp-strengthening-checklist.md
     - Development:
       - Adding a New Agent: guides/dev/new-agent.md
       - Adding an Orchestrator: guides/dev/new-orchestrator.md
+      - Portal + Gateway Auth Setup: guides/dev/portal-gateway-auth.md
+      - Customer Portal (portal-customer): guides/dev/customer-portal.md
       - Writing Tests: guides/dev/testing.md
       - LLM Integration: guides/dev/llm-integration.md
     - Operations:
       - Running Consumers: guides/ops/consumers.md
+      - Inbox Pre-Filter: guides/ops/inbox-pre-filter.md
+      - Observability: guides/ops/observability.md
       - Monitoring: guides/ops/monitoring.md
+      - Scaling Concerns: guides/ops/scaling-concerns.md
       - Troubleshooting: guides/ops/troubleshooting.md
       - Incident Response: guides/ops/incident-response.md
     - Deployment:
+      - Overview: guides/deploy/index.md
+      - Infrastructure Overview: guides/deploy/infrastructure.md
       - Docker Compose: guides/deploy/docker.md
       - Kubernetes: guides/deploy/kubernetes.md
+      - Helm Chart: guides/deploy/helm.md
       - CI/CD: guides/deploy/ci-cd.md
       - Secrets Management: guides/deploy/secrets.md
   
   - Reference:
     - reference/index.md
+    - Core Utilities: reference/core-utilities.md
     - API:
       - Envelope Schema: reference/api/envelope.md
       - Stream Keys: reference/api/streams.md
@@ -189,6 +204,16 @@ nav:
     - Data Flow: architecture/data-flow.md
     - Communication Rules: architecture/communication.md
     - Security Model: architecture/security.md
+
+  - Websites:
+    - websites/index.md
+    - Design Philosophy: websites/design-philosophy.md
+    - Feature Roadmap: websites/roadmap.md
+    - Implementation Details: websites/implementations.md
+    - Portals:
+      - Internal Portal: websites/portal.md
+      - Customer Portal: websites/portal-customer.md
+      - Experimental Portals: websites/experimental.md
     - Decisions (ADRs):
       - architecture/decisions/index.md
       - ADR-001 Three-Tier Architecture: architecture/decisions/001-three-tier-architecture.md
@@ -197,9 +222,13 @@ nav:
       - ADR-004 Supabase RLS: architecture/decisions/004-supabase-rls-3-layer-auth.md
       - ADR-005 Agent Harness: architecture/decisions/005-agent-harness-pattern.md
       - ADR-006 LangGraph: architecture/decisions/006-langgraph-deep-agents.md
+      - ADR-007 January 2026 Summary: architecture/decisions/007-january-2026-summary.md
   
   - Roadmap:
     - roadmap/index.md
+    - Immediate Fixes: roadmap/imediate_fixes.md
+    - System-Wide Development: roadmap/system-wide-development.md
+    - Learning & Development: roadmap/Learning&Development.md
     - In Progress: roadmap/in-progress.md
     - Future Plans: roadmap/future.md
     - Changelog: roadmap/changelog.md

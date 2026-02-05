@@ -27,9 +27,13 @@ try:
 except Exception:
     pass
 
+from config.settings import validate_keys
+
 from services.redis import RedisStreamsClient
 from .rag_agent_harness import RAGAgentHarness
 from core.envelope import from_redis_message, to_redis_fields, result as create_result_envelope, error as create_error_envelope
+from core.dlq import DeadLetterQueue
+from core.observability import start_metrics_server, start_redis_stream_metrics
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,6 +78,7 @@ class RAGConsumer:
         # Stream names - organized under agents namespace
         self.task_stream = f"{tenant_id}:agents:rag:tasks"
         self.result_stream = f"{tenant_id}:agents:rag:results"
+        self.dlq = DeadLetterQueue(redis_client, self.task_stream)
         
         # Create harness
         self.harness = RAGAgentHarness(
@@ -91,6 +96,50 @@ class RAGConsumer:
             f"RAGConsumer initialized: tenant={tenant_id}, "
             f"group={consumer_group}, name={self.consumer_name}"
         )
+
+    def _get_delivery_count(self, message_id: str) -> int:
+        try:
+            client = getattr(self.redis, "client", self.redis)
+            pending = client.xpending_range(
+                self.task_stream,
+                self.consumer_group,
+                min=message_id,
+                max=message_id,
+                count=1,
+            )
+            if pending:
+                entry = pending[0]
+                if isinstance(entry, dict):
+                    return int(entry.get("times_delivered", 1))
+                if isinstance(entry, (list, tuple)) and len(entry) >= 4:
+                    return int(entry[3])
+        except Exception:
+            pass
+        return 1
+
+    def _handle_failure(self, message_id: str, message_data: Dict[str, Any], error: Exception, envelope=None) -> None:
+        failure_count = self._get_delivery_count(message_id)
+        if self.dlq.should_dlq(failure_count):
+            self.dlq.send_to_dlq(
+                message_data,
+                message_id,
+                error=error,
+                failure_count=failure_count,
+                consumer_name=self.consumer_name,
+                tenant_id=self.tenant_id,
+            )
+            if envelope is not None:
+                try:
+                    error_envelope = create_error_envelope(
+                        original=envelope,
+                        error_msg=str(error),
+                        source="rag_agent",
+                        code="RAG_ERROR",
+                    )
+                    self.redis.xadd(self.result_stream, to_redis_fields(error_envelope))
+                except Exception as publish_exc:  # pragma: no cover
+                    logger.error(f"Failed to publish error envelope: {publish_exc}", exc_info=True)
+            self.redis.xack(self.task_stream, self.consumer_group, message_id)
     
     def _ensure_consumer_group(self):
         """Create consumer group if it doesn't exist"""
@@ -161,16 +210,7 @@ class RAGConsumer:
             
         except Exception as e:
             logger.error(f"Error processing RAG task: {e}", exc_info=True)
-            
-            # Create error envelope if we have the original envelope context, otherwise generic
-            # Note: In a real scenario we might not have 'envelope' if parsing failed.
-            # For simplicity, we'll assume parsing might have failed or execution failed.
-            
-            # If we can't even parse the envelope, we can't easily reply with a correlated error.
-            # But if we have task_data/task_id from a partial parse, we could try.
-            # Here we'll just log it, but if we had the envelope we'd send an error envelope.
-            
-            # Don't ack - let it retry or go to pending
+            self._handle_failure(message_id, message_data, e, envelope=locals().get("envelope"))
             raise
 
     def _serialize_result(self, result: Any) -> Any:
@@ -180,18 +220,62 @@ class RAGConsumer:
         Optimization: Extract only essential fields to reduce stream size.
         """
         if isinstance(result, dict):
+            # If this looks like a lead-context retrieval result, preserve the context.
+            # This is required for inbound reply flows where downstream Copywriter needs
+            # lead/conversation/message data.
+            if any(k in result for k in ("lead", "conversations", "conversation", "messages", "query_trace")):
+                lead = result.get("lead") if isinstance(result.get("lead"), dict) else None
+
+                # Normalized conversations: accept either a list (get_lead_context) or a single conversation (build_reply_context)
+                conversations = []
+                if isinstance(result.get("conversations"), list):
+                    conversations = result.get("conversations")
+                elif isinstance(result.get("conversation"), dict):
+                    conversations = [result.get("conversation")]
+
+                # Messages (chronological)
+                messages = result.get("messages") if isinstance(result.get("messages"), list) else []
+
+                # Bound stream size; deep contexts can be larger but still capped.
+                conversations = conversations[:15]
+                messages = messages[:200]
+
+                return {
+                    "status": result.get("status"),
+                    "task_id": result.get("task_id"),
+                    "execution_id": result.get("execution_id"),
+                    "duration_ms": result.get("duration_ms"),
+                    "lead": lead,
+                    "lead_source": result.get("lead_source"),
+                    "conversation_source": result.get("conversation_source"),
+                    "conversations": conversations,
+                    "messages": messages,
+                    "message_count": result.get("message_count") or len(messages),
+                    "query_trace": result.get("query_trace"),
+                    "match_reason": result.get("match_reason") or result.get("selection_reason"),
+                    "error": result.get("error"),
+                    "other_threads": result.get("other_threads"),
+                    "retrieved_at": result.get("retrieved_at"),
+                }
+
             # If already minimal format from RAGAgent, pass through
             if 'status' in result and 'task_id' in result:
                 return {
                     'status': result.get('status'),
                     'task_id': result.get('task_id'),
+                    'execution_id': result.get('execution_id'),
                     'enriched_fields': result.get('enriched_fields', [])[:10],
                     'sources': result.get('sources', [])[:5],
                     'confidence': result.get('confidence', 0.0),
                     'duration_ms': result.get('duration_ms', 0),
                     'error': result.get('error', '')[:200] if result.get('error') else None,
                     'completeness_score': result.get('completeness_score'),
-                    'missing_fields': result.get('missing_fields', [])[:5] if result.get('missing_fields') else None
+                    'missing_fields': result.get('missing_fields', [])[:5] if result.get('missing_fields') else None,
+                    'lead_found': result.get('lead_found'),
+                    'lead_source': result.get('lead_source'),
+                    'conversation_count': result.get('conversation_count'),
+                    'message_count': result.get('message_count'),
+                    'query_trace': result.get('query_trace'),
                 }
             # Otherwise serialize recursively but limit depth
             return {k: self._serialize_value(v) for k, v in list(result.items())[:20]}
@@ -265,7 +349,16 @@ class RAGConsumer:
                 )
                 
                 if not messages:
-                    continue
+                    pending = self.redis.xreadgroup(
+                        group=self.consumer_group,
+                        consumer=self.consumer_name,
+                        streams={self.task_stream: "0"},
+                        count=count,
+                        block=1,
+                    )
+                    if not pending:
+                        continue
+                    messages = pending
                 
                 # Process messages
                 for stream_name, stream_messages in messages:
@@ -286,9 +379,13 @@ class RAGConsumer:
 
 async def main():
     """Main entry point"""
+    validate_keys(raise_on_missing=True)
     # Get configuration from environment
     tenant_id = os.getenv("TENANT_ID", "agentic-dev")
     environment = os.getenv("ENVIRONMENT", "development")
+    
+    # Start metrics server for this component
+    start_metrics_server(component="rag_agent")
     
     # Connect to Redis
     redis_url = os.getenv("REDIS_URL")
@@ -297,6 +394,13 @@ async def main():
 
     redis_pubsub = RedisStreamsClient(url=redis_url)
     redis_client = redis_pubsub.client
+
+    start_redis_stream_metrics(
+        redis_url=redis_url,
+        tenant_id=tenant_id,
+        component="rag_agent",
+        streams=[(f"{tenant_id}:agents:rag:tasks", "rag-workers")],
+    )
     
     # Create and run consumer
     consumer = RAGConsumer(

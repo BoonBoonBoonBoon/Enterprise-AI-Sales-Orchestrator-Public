@@ -61,10 +61,11 @@ class HarnessConfig:
     # ==================== Observability Configuration ====================
     observability_backend: str = "simple"
     """
-    Observability backend: 'simple', 'opentelemetry', 'datadog'
+    Observability backend: 'simple', 'grafana', 'opentelemetry', 'datadog'
     
     - simple: Plain logging to stderr (development)
-    - opentelemetry: CNCF standard (staging/prod)
+    - grafana: Grafana stack - Prometheus/Loki/Tempo (recommended for production)
+    - opentelemetry: CNCF standard (staging/prod with OTel collector)
     - datadog: Datadog APM (production with Datadog)
     """
     

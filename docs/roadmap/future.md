@@ -163,6 +163,167 @@ Enable partners to offer the platform under their brand.
 
 ## Backlog (Unscheduled)
 
+## Adjacent Offerings (Product Expansion Ideas)
+
+These are **additional sellable modules/services** that reuse the same agentic primitives you already have (ingress → Manager → orchestrators → Tier-3 agents → persistence + observability). They are intentionally written as “future work” so you can pick them up later without re-arguing the shape.
+
+Each item includes a crisp MVP slice and what it would likely require.
+
+### 1) Sales Call Copilot (Live + Post-Call)
+
+**Problem it solves:** Reps miss follow-ups, next steps, and objection handling; managers lack consistent coaching signals.
+
+**MVP slice:**
+
+- Ingest call audio/transcript (Zoom/Meet upload webhook or manual upload).
+- Generate: summary, next steps, risks, objections, and a follow-up email draft.
+- Persist: call record + extracted entities + suggested tasks.
+
+**Dependencies:** transcription provider, calendar/meeting integration, PII handling + retention policy.
+
+**Monetization:** per-seat add-on; premium tier for coaching + analytics.
+
+---
+
+### 2) Customer Success Inbox Copilot (Renewals + Support)
+
+**Problem it solves:** High-volume inbound support/CS email is repetitive; renewal risk signals are buried in threads.
+
+**MVP slice:**
+
+- Inbound triage + categorization (support vs renewal vs billing vs escalation).
+- Draft replies using account context + prior resolution patterns.
+- “Risk flags” surfaced to ops (sentiment downshift, churn keywords, repeated pain).
+
+**Dependencies:** knowledge base ingestion (docs + prior tickets), safe escalation policy, approval-first UX.
+
+**Monetization:** per-inbox/month; higher tier for risk scoring + playbooks.
+
+---
+
+### 3) Workflow Builder (Non-Dev Orchestration)
+
+**Problem it solves:** Every new automation requires engineering changes; hard to iterate across teams.
+
+**MVP slice:**
+
+- UI for: triggers (email/webhook), steps (classify, retrieve, draft, store), and gates (approval, confidence threshold).
+- Generates a validated “workflow spec” that the Manager can execute.
+- Audit log: every step, inputs/outputs, decisions.
+
+**Dependencies:** a stable internal workflow DSL, versioning/rollback, safety guardrails to prevent cross-stream violations.
+
+**Monetization:** platform tier; charges scale with workflows + executions.
+
+---
+
+### 4) Deliverability + Domain Warmup (Ops Service)
+
+**Problem it solves:** Outreach fails when deliverability is poor; warmup tooling is fragmented.
+
+**MVP slice:**
+
+- Health checks (SPF/DKIM/DMARC, bounce rate tracking).
+- Warmup scheduler + throttles (ties into Channel Sequencer constraints).
+- Simple dashboard: reputation indicators + recommended actions.
+
+**Dependencies:** mailbox telemetry, sending constraints, strong compliance posture.
+
+**Monetization:** managed service + subscription; premium onboarding package.
+
+---
+
+### 5) Data Enrichment + Lead Intelligence (RAG-First)
+
+**Problem it solves:** Bad lead data causes weak personalization and wasted touches.
+
+**MVP slice:**
+
+- Given an email/domain: enrich company name, role, website, ICP tags.
+- Persist enrichment with provenance + timestamps.
+- Expose “confidence + sources” to downstream drafting.
+
+**Dependencies:** external enrichment APIs, caching, cost controls, provenance tracking.
+
+**Monetization:** per-enrichment credit packs; bundled into higher tiers.
+
+---
+
+### 6) Compliance / Brand QA Gate (Pre-Send Review)
+
+**Problem it solves:** Teams need consistent tone + compliance checks before messages go out.
+
+**MVP slice:**
+
+- Run an automated QA pass on drafted outbound: banned phrases, claims, link checks, tone rules.
+- Block or require approval with a human-readable reason.
+
+**Dependencies:** policy engine + rule configuration UI, audit logging, tenant-specific rules.
+
+**Monetization:** compliance add-on; regulated-industry tier.
+
+---
+
+### 7) “Human-in-the-Loop” Ops Console (Internal Service Offering)
+
+**Problem it solves:** Many customers want outcomes, not tooling; your team needs a single pane for approvals and escalations.
+
+**MVP slice:**
+
+- Internal dashboard for: draft queue across tenants, escalations, retries/DLQ, and QA failures.
+- SLA tagging + assignment.
+
+**Dependencies:** multi-tenant admin RBAC, operational runbooks, DLQ workflows.
+
+**Monetization:** managed service retainer; premium support plan.
+
+---
+
+### 8) “Playbook Packs” (Verticalized Copy + Policies)
+
+**Problem it solves:** Customers struggle to configure prompts/policies; time-to-value is too slow.
+
+**MVP slice:**
+
+- Pre-built playbooks (SaaS inbound, agency inbound, SDR follow-ups, etc.) that set:
+  - classification intent rules,
+  - drafting style constraints,
+  - safe-send gates.
+
+**Dependencies:** packaging/versioning of config + prompts, easy import/export.
+
+**Monetization:** add-on marketplace; onboarding bundle.
+
+---
+
+### 9) CRM “Close the Loop” (Sync + Outcome Tracking)
+
+**Problem it solves:** Without outcomes (meetings booked, deals created), it’s hard to prove ROI.
+
+**MVP slice:**
+
+- Bi-directional sync for contacts/leads + activity logging.
+- Track outcomes tied back to `correlation_id` (reply → meeting → pipeline).
+
+**Dependencies:** Salesforce/HubSpot integrations, identity mapping, rate limits.
+
+**Monetization:** higher tier; per-integration fee.
+
+---
+
+### 10) Multi-Client Agency Workspace (True Hierarchy)
+
+**Problem it solves:** Agencies need client sub-workspaces with separation and reporting.
+
+**MVP slice:**
+
+- Agency tenant → client workspaces (scoped streams + scoped data).
+- Cross-client reporting for the agency admin.
+
+**Dependencies:** tenancy model upgrades, strict RLS, portal UX changes.
+
+**Monetization:** agency plan priced by client workspaces + volume.
+
 ### Ideas Under Consideration
 
 | Idea                    | Priority | Notes                                           |

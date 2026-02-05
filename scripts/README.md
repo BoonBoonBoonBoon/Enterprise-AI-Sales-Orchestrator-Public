@@ -35,18 +35,15 @@ scripts/
 Used during system initialization or deployment.
 
 #### `generate_mock_leads.py`
-
 **Purpose:** Generate test data for development and testing
 
 **Usage:**
-
 ```bash
 cd scripts/startup
 python generate_mock_leads.py --count 100 --industry fintech
 ```
 
 **Options:**
-
 - `--count` - Number of leads to generate
 - `--industry` - Filter by industry
 - `--region` - Filter by region
@@ -56,23 +53,19 @@ python generate_mock_leads.py --count 100 --industry fintech
 ---
 
 #### `ingest_cli.py`
-
 **Purpose:** Manual task ingestion via CLI
 
 **Usage:**
-
 ```bash
 python ../ingest_cli.py --mode ingest --task-type lead_discovery
 ```
 
 **Docker:**
-
 ```bash
 docker compose --profile tools run --rm ingest_cli
 ```
 
 **Options:**
-
 - `--mode` - Ingestion mode (ingest, test, debug)
 - `--task-type` - Task type to ingest
 - `--count` - Number of tasks
@@ -84,17 +77,14 @@ docker compose --profile tools run --rm ingest_cli
 Used for operational visibility and health checks.
 
 #### `health_check.py`
-
 **Purpose:** Verify service health and connectivity
 
 **Usage:**
-
 ```bash
 python health_check.py
 ```
 
 **Checks:**
-
 - Redis connectivity and version
 - Database connectivity and migrations
 - Vector DB availability
@@ -102,7 +92,6 @@ python health_check.py
 - Consumer group status
 
 **Output:**
-
 ```
 ✓ Redis connected (v7.0.0)
 ✓ Database ready (migrations: 15/15)
@@ -114,24 +103,20 @@ python health_check.py
 ---
 
 #### `health_server.py`
-
 **Purpose:** HTTP health check endpoint
 
 **Usage:**
-
 ```bash
 python health_server.py --host 0.0.0.0 --port 8080
 ```
 
 **Endpoints:**
-
 - `GET /health` - Full health status (JSON)
 - `GET /healthz` - Kubernetes liveness probe
 - `GET /ready` - Readiness probe
 - `GET /metrics` - Prometheus metrics
 
 **Docker:**
-
 ```yaml
 # docker-compose.yml
 health_server:
@@ -143,17 +128,14 @@ health_server:
 ---
 
 #### `streams_health.py`
-
 **Purpose:** Monitor Redis Streams status
 
 **Usage:**
-
 ```bash
 python streams_health.py
 ```
 
 **Monitors:**
-
 - Stream sizes (rag:tasks, rag:results, etc.)
 - Consumer group lag per agent
 - Pending messages (to-be-retried)
@@ -161,7 +143,6 @@ python streams_health.py
 - Message throughput (msg/sec)
 
 **Output:**
-
 ```
 Stream: rag:tasks
 ├─ Length: 1234 messages
@@ -176,17 +157,14 @@ Stream: rag:tasks
 ---
 
 #### `redis_health.py`
-
 **Purpose:** Check Redis connectivity and status
 
 **Usage:**
-
 ```bash
 python redis_health.py --url redis://localhost:6379
 ```
 
 **Checks:**
-
 - Connection (ping)
 - Memory usage
 - Key count
@@ -196,17 +174,14 @@ python redis_health.py --url redis://localhost:6379
 ---
 
 #### `redis_stream_smoke.py`
-
 **Purpose:** Quick smoke test of Redis Streams
 
 **Usage:**
-
 ```bash
 python redis_stream_smoke.py
 ```
 
 **Tests:**
-
 - Create stream
 - Add messages
 - Create consumer group
@@ -220,11 +195,9 @@ python redis_stream_smoke.py
 Used for ongoing system operations.
 
 #### `streams_group_reset.py`
-
 **Purpose:** Reset consumer group to different position
 
 **Usage:**
-
 ```bash
 # Reset to latest (new messages only)
 python streams_group_reset.py --stream rag:tasks --group rag-workers --position latest
@@ -237,7 +210,6 @@ python streams_group_reset.py --stream rag:tasks --group rag-workers --position 
 ```
 
 **Options:**
-
 - `--stream` - Stream name (rag:tasks, persist:tasks, etc.)
 - `--group` - Consumer group name
 - `--position` - start, latest, or message ID
@@ -245,11 +217,9 @@ python streams_group_reset.py --stream rag:tasks --group rag-workers --position 
 ---
 
 #### `dlq_requeue.py`
-
 **Purpose:** Reprocess messages from Dead-Letter Queue
 
 **Usage:**
-
 ```bash
 # Replay all DLQ messages
 python dlq_requeue.py --stream rag:tasks:dlq --destination rag:tasks
@@ -262,8 +232,7 @@ python dlq_requeue.py --stream rag:tasks:dlq --destination rag:tasks --delay 5s
 ```
 
 **Workflow:**
-
-1. Read from \*.dlq stream
+1. Read from *.dlq stream
 2. Apply fixes (if any)
 3. Re-enqueue to original stream
 4. Mark as requeued
@@ -271,11 +240,9 @@ python dlq_requeue.py --stream rag:tasks:dlq --destination rag:tasks --delay 5s
 ---
 
 #### `dlq_automation.py`
-
 **Purpose:** Automatically handle DLQ messages
 
 **Usage:**
-
 ```bash
 # Run daemon that processes DLQ periodically
 python dlq_automation.py --interval 60 --max-age 3600
@@ -285,7 +252,6 @@ python dlq_automation.py --once
 ```
 
 **Options:**
-
 - `--interval` - Check interval (seconds)
 - `--max-age` - Max age before archiving (seconds)
 - `--once` - Single run only
@@ -294,17 +260,14 @@ python dlq_automation.py --once
 ---
 
 #### `check_namespace.py`
-
 **Purpose:** Validate stream namespace and structure
 
 **Usage:**
-
 ```bash
 python check_namespace.py --namespace agentic-prod
 ```
 
 **Validates:**
-
 - Stream naming conventions
 - Consumer group presence
 - Required streams exist
@@ -330,7 +293,6 @@ docker compose exec manager python scripts/monitoring/streams_health.py
 ### Background Service (health_server)
 
 Already running via `docker compose`:
-
 ```bash
 curl http://localhost:8080/health | jq
 ```
@@ -357,7 +319,7 @@ source .venv/bin/activate  # Linux/Mac
 # Set environment
 export REDIS_URL=redis://localhost:6379
 export SUPABASE_URL=https://xxx.supabase.co
-export SUPABASE_KEY=<SUPABASE_JWT>
+export SUPABASE_KEY=eyJ...
 ```
 
 ### Execute
@@ -435,21 +397,18 @@ python scripts/maintenance/dlq_automation.py --once
 ## Script Organization Guidelines
 
 ### Startup Scripts
-
 - Run during system initialization
 - Set up infrastructure state
 - Usually one-time or infrequent
 - Examples: migrations, seeding, setup
 
 ### Monitoring Scripts
-
 - Run continuously or periodically
 - Provide operational visibility
 - Used for debugging and observability
 - Examples: health checks, metrics, diagnostics
 
 ### Maintenance Scripts
-
 - Run on-demand for operations
 - Fix or manage system state
 - Handle edge cases and recovery
@@ -485,7 +444,7 @@ def main():
     parser = argparse.ArgumentParser(description="What this does")
     parser.add_argument("--option", default="value", help="Description")
     args = parser.parse_args()
-
+    
     logger.info(f"Running with: {args}")
     # Implementation
 
@@ -504,7 +463,6 @@ scripts/logs/       # If writing logs
 ### 4. Document in This README
 
 Add entry under appropriate category with:
-
 - Purpose
 - Usage
 - Options

@@ -4,12 +4,12 @@ The Copywriter Agent generates AI-powered email content, including subject lines
 
 ## Overview
 
-| Property          | Value                                               |
-| ----------------- | --------------------------------------------------- |
-| **Tier**          | 3 (Execution)                                       |
-| **Stream**        | `{tenant}:agents:copywriter:tasks`                  |
-| **Database Role** | None (no direct DB access)                          |
-| **Core File**     | `tiers/tier_3/copywriter_agent/copywriter_agent.py` |
+| Property          | Value                                         |
+| ----------------- | --------------------------------------------- |
+| **Tier**          | 3 (Execution)                                 |
+| **Stream**        | `{tenant}:agents:copywriter:tasks`            |
+| **Database Role** | None (no direct DB access)                    |
+| **Core File**     | `tiers/tier_3/copywriter_agent/copywriter.py` |
 
 ## Responsibilities
 
@@ -31,16 +31,18 @@ Generate a reply to an inbound email.
 {
   "action": "draft_reply",
   "reply_packet": {
-    "lead_id": "uuid-lead",
-    "lead_source": "leads",
-    "context": {
-      "name": "John Doe",
+    "lead_resolution": { "status": "found", "lead_id": "uuid-lead" },
+    "facts": {
+      "first_name": "John",
       "company": "Acme Inc",
+      "email": "john@example.com"
+    },
+    "conversation": {
       "recent_messages": [
         { "role": "lead", "content": "I'm interested in your product..." }
       ]
     },
-    "thread_id": "uuid-conv"
+    "inbound_email_event": { "thread_id": "thread-123", "subject": "Re: ..." }
   }
 }
 ```
@@ -60,6 +62,10 @@ Generate a reply to an inbound email.
   }
 }
 ```
+
+## Placeholder Sanitization
+
+Copywriter outputs are post-processed to remove or replace common template placeholders (for example `[...]` fragments) when models occasionally ignore prompt constraints.
 
 ### `generate_outreach`
 

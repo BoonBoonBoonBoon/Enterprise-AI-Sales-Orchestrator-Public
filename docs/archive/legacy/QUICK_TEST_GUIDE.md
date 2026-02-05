@@ -1,11 +1,11 @@
-﻿# Quick Test Guide
+# Quick Test Guide
 
 ## Before Running Tests
 
 1. **Ensure Redis is accessible**:
    ```bash
    # Connection details in .env or hardcoded in test files
-   REDIS_URL=redis://<REDACTED_REDIS_URL>
+   REDIS_URL=redis://default:***@redis-15143.c335.europe-west2-1.gce.redns.redis-cloud.com:15143/0
    TENANT_ID=agentic-dev
    ```
 
@@ -36,8 +36,8 @@ python test_e2e_flow.py
 ```
 
 **What It Tests**:
-1. **Manager â†’ Leads**: Sends task to manager, verifies delegation to leads
-2. **Leads â†’ RAG**: Sends task to leads, verifies delegation to RAG
+1. **Manager → Leads**: Sends task to manager, verifies delegation to leads
+2. **Leads → RAG**: Sends task to leads, verifies delegation to RAG
 
 **Expected Output**:
 ```
@@ -46,7 +46,7 @@ python test_e2e_flow.py
 ======================================================================
 
 Tenant: agentic-dev
-Redis: your-redis-host.redns.redis-cloud.com:6379/0
+Redis: redis-15143.c335.europe-west2-1.gce.redns.redis-cloud.com:15143/0
 
 ======================================================================
   Starting All Consumers
@@ -202,18 +202,18 @@ python test_e2e_flow.py
 
 ## Success Indicators
 
-âœ… **Full Success**:
-- Test 1 PASSED: Manager â†’ Leads delegation working
-- Test 2 PASSED: Leads â†’ RAG delegation working
+✅ **Full Success**:
+- Test 1 PASSED: Manager → Leads delegation working
+- Test 2 PASSED: Leads → RAG delegation working
 - Both tests show message count increases
 - Logs show tool invocations
 
-âš ï¸ **Partial Success**:
+⚠️ **Partial Success**:
 - Test 1 PASSED: Tier 1 delegation working
 - Test 2 INCOMPLETE: Tier 2 delegation needs debugging
 - This is the current expected state
 
-âŒ **Failure**:
+❌ **Failure**:
 - Test 1 INCOMPLETE: Basic delegation broken
 - Check stream naming and consumer startup
 
@@ -238,7 +238,7 @@ python start_all_consumers.py
 python test_manager_direct.py
 
 # Check Redis streams directly
-redis-cli -h your-redis-host.redns.redis-cloud.com -p 15143 -a PASSWORD
+redis-cli -h redis-15143.c335.europe-west2-1.gce.redns.redis-cloud.com -p 15143 -a PASSWORD
 > XLEN agentic-dev:leads:tasks
 > XLEN agentic-dev:agents:rag:tasks
 ```
@@ -247,6 +247,3 @@ redis-cli -h your-redis-host.redns.redis-cloud.com -p 15143 -a PASSWORD
 
 **Last Updated**: November 22, 2025  
 **Status**: Ready for testing with enhanced logging
-
-
-

@@ -32,8 +32,34 @@ Each agent/orchestrator has its own consumer.
 # Outreach Orchestrator
 & ".venv/Scripts/python.exe" -m tiers.tier_2.outreach_orchestrator.consumer
 
+# Inbound Orchestrator
+& ".venv/Scripts/python.exe" -m tiers.tier_2.inbound_orchestrator.consumer
+
+# Classifier Agent (used by Inbound Orchestrator)
+& ".venv/Scripts/python.exe" -m tiers.tier_3.classifier_agent.consumer
+
 # Manager
 & ".venv/Scripts/python.exe" -m tiers.tier_1.manager.consumer
+```
+
+## Ingress Services (Email Inbox)
+
+Inbox ingestion is handled by Tier-0 ingress processes (not orchestrators/agents). Run these alongside the Manager.
+
+### Inbox Poller (Primary)
+
+Polls Gmail API or IMAP and publishes typed envelopes to `{tenant}:manager:tasks`.
+
+```powershell
+& ".venv/Scripts/python.exe" -m services.email.inbox_poller --tenant agentic-dev --provider gmail --poll-interval 60
+```
+
+### Webhook Receiver (Backup)
+
+FastAPI endpoint that accepts `inbound_email_event` JSON and publishes to `{tenant}:manager:tasks`.
+
+```powershell
+& ".venv/Scripts/python.exe" -m services.email.webhook_receiver
 ```
 
 ### All Consumers (Development)

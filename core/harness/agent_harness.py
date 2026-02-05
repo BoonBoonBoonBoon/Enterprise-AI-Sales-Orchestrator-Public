@@ -17,6 +17,8 @@ import logging
 from typing import Any, Optional
 from datetime import datetime
 
+from core.observability.metrics import MetricsCollector
+
 from .interfaces import (
     IRetryStrategy,
     IObservability,
@@ -38,11 +40,8 @@ from .observability import (
     OpenTelemetryObservability,
     DatadogObservability,
 )
-from .checkpointing import (
-    RedisCheckpointer,
-    S3Checkpointer,
-    PostgreSQLCheckpointer,
-)
+# Note: checkpointers are imported lazily inside `from_config` to avoid
+# importing optional heavy dependencies (e.g., boto3) on startup.
 from .quota_management import (
     RedisTokenBucket,
     InMemoryQuota,
@@ -185,6 +184,18 @@ class AgentHarness:
         observability = None
         if config.observability_backend == "simple":
             observability = SimpleLoggingObservability()
+        elif config.observability_backend == "grafana":
+            from .observability.grafana_stack import GrafanaStackObservability
+            # Infer tier from service name or default to "agent"
+            tier = "agent"
+            if hasattr(agent, "tier"):
+                tier = agent.tier
+            component = getattr(agent, "name", config.service_name)
+            observability = GrafanaStackObservability(
+                tier=tier,
+                component=component,
+                tenant_id=getattr(agent, "tenant_id", "default"),
+            )
         elif config.observability_backend == "opentelemetry":
             try:
                 observability = OpenTelemetryObservability(
@@ -221,6 +232,8 @@ class AgentHarness:
                         "Redis checkpointer requested but no redis_client provided"
                     )
                 else:
+                    from .checkpointing.redis_checkpointer import RedisCheckpointer
+
                     checkpointer = RedisCheckpointer(
                         redis_client,
                         ttl_seconds=86400,  # 24 hours
@@ -233,6 +246,8 @@ class AgentHarness:
                     )
                 else:
                     try:
+                        from .checkpointing.s3_checkpointer import S3Checkpointer
+
                         checkpointer = S3Checkpointer(
                             bucket_name=s3_bucket_name,
                             prefix="checkpoints/",
@@ -247,6 +262,8 @@ class AgentHarness:
                     )
                 else:
                     try:
+                        from .checkpointing.postgres_checkpointer import PostgreSQLCheckpointer
+
                         checkpointer = PostgreSQLCheckpointer(
                             connection_string=postgres_connection_string
                         )
@@ -331,6 +348,21 @@ class AgentHarness:
         # 1. Generate execution ID
         execution_id = execution_id or f"exec_{uuid.uuid4()}"
         start_time = datetime.now()
+
+        # Prometheus metrics (emitted regardless of harness backend)
+        metrics = MetricsCollector.get_instance()
+        component = getattr(self.agent, "name", None) or self.config.service_name or self.agent.__class__.__name__
+        tenant_id = getattr(self.agent, "tenant_id", "default")
+
+        tier = getattr(self.agent, "tier", None)
+        if not tier:
+            agent_name = self.agent.__class__.__name__.lower()
+            if "orchestrator" in agent_name:
+                tier = "orchestrator"
+            elif "manager" in agent_name:
+                tier = "manager"
+            else:
+                tier = "agent"
         
         logger.info(
             f"[{execution_id}] Starting execution on {self.agent.__class__.__name__}"
@@ -417,6 +449,12 @@ class AgentHarness:
                     logger.info(
                         f"[{execution_id}] Success in {elapsed_ms:.2f}ms"
                     )
+
+                    metrics.histogram(
+                        f"{tier}.latency_ms",
+                        elapsed_ms,
+                        tags={"component": component, "tenant": tenant_id},
+                    )
                     
                     if self.observability:
                         self.observability.record_metric(
@@ -437,6 +475,16 @@ class AgentHarness:
                     )
                     logger.error(
                         f"[{execution_id}] Failed after {elapsed_ms:.2f}ms: {e}"
+                    )
+
+                    metrics.increment(
+                        f"{tier}.errors.total",
+                        tags={"component": component, "tenant": tenant_id},
+                    )
+                    metrics.histogram(
+                        f"{tier}.latency_ms",
+                        elapsed_ms,
+                        tags={"component": component, "tenant": tenant_id},
                     )
                     
                     if self.observability:

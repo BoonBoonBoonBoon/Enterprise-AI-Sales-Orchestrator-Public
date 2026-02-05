@@ -16,7 +16,17 @@ def client():
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     r = redis.Redis.from_url(redis_url, decode_responses=True)
     r.ping()
-    return r
+    try:
+        yield r
+    finally:
+        try:
+            r.close()
+        except Exception:
+            pass
+        try:
+            r.connection_pool.disconnect()
+        except Exception:
+            pass
 
 
 @pytest.fixture(autouse=True)

@@ -15,47 +15,146 @@ The Leads Orchestrator manages lead-related workflows including ingestion, enric
 
 - Process inbound leads and emails
 - Coordinate lead enrichment
+- Qualify and promote staging leads to `leads`
 - Retrieve lead context for replies
 - Create `reply_packet` for downstream use
 - Store lead and conversation data
 
-## Actions
+## Key Flows
 
-### `process_inbound`
+### Staging vs `leads` routing
 
-Handle new inbound email or lead.
+Inbound events are stored in either:
+
+- **`staging_*` tables** (`staging_leads`, `staging_conversations`, `staging_messages`) for pre-qualification intake, or
+- **live tables** (`leads`, `conversations`, `messages`) when a lead is already qualified or is **fast-tracked**.
+
+The qualification thresholds and fast-track rules live in `config/manager/qualification.yaml`:
+
+- `thresholds.auto_promote`: score ≥ 70 → promote staging → leads
+- `thresholds.fast_track`: score ≥ 85 → skip staging and write directly to leads
+- `thresholds.disqualify`: score ≤ 20 → disqualify (archive staging lead)
+
+### Qualification lifecycle (decision → persisted state)
+
+LeadsOrchestrator persists the scorer decision consistently via:
+
+- `tiers/tier_2/leads_orchestrator/qualification/lifecycle.py`
+
+This prevents hardcoding `qualification_status="qualified"` in multiple flows.
+
+**Persisted `qualification_status` values** are normalized to one of:
+
+- `pending` (default for unknown/empty)
+- `qualified`
+- `nurture`
+- `disqualified`
+- `fast_track`
+
+**Where this matters:**
+
+- Inbound auto-promotion: updates `staging_leads` with the normalized decision and `promotion_ready`.
+- Manual `intent: qualify_lead`: promotion tasks carry the normalized `qualification_status`.
+- Fast-track writes: when skipping staging and writing directly to `leads`, the lead row stores the normalized decision.
+
+### Stale staging lead sweeper (maintenance)
+
+To prevent staging leads from silently stalling in `pending/pending/not-ready`, a small maintenance script exists:
+
+- `scripts/maintenance/sweep_stale_staging_leads.py`
+
+It is dry-run by default and only writes with `--apply`.
+
+### `intent: inbound` (persist inbound email)
+
+Handle an inbound email event and persist it deterministically.
+
+This path exists to ensure inbound emails are stored even when a payload contains conversation-like words ("thread", "history", etc.).
+
+**Request (typical Manager → Leads payload):**
+
+```json
+{
+  "intent": "inbound",
+  "payload": {
+    "context": {
+      "email_event": {
+        "from": "john@example.com",
+        "subject": "Interested in your product",
+        "body": "Hi, I saw your demo and...",
+        "message_id": "msg-123",
+        "direction": "inbound"
+      }
+    }
+  }
+}
+```
+
+**Response (summary):**
+
+```json
+{
+  "success": true,
+  "orchestrator": "leads",
+  "path": "inbound_persist",
+  "store_inbound": { "status": "enqueued" }
+}
+```
+
+**Auto-promotion behavior:**
+
+- Inbound persistence always stores the email first (typically into `staging_*` unless an existing lead is found).
+- If the qualification pipeline marks the lead as `promote=True`, LeadsOrchestrator also enqueues a second Persistence operation:
+  - `operation: promote_staging_lead`
+  - `staging_lead_id: <uuid>`
+- Staging data is preserved for audit: promotion uses soft-archiving (`archived_at`) and does not hard-delete threads/messages.
+
+### `intent: qualify_lead` (promote staging lead)
+
+Evaluate a staging lead (and its messages) and promote it to `leads` when qualified.
+
+High-level behavior:
+
+1. Fetch staging lead context via RAG (`context_depth="deep"`)
+2. Score using hybrid rules (and optional LLM fallback)
+3. If `promote=True` (typically score ≥ `thresholds.auto_promote`), enqueue `operation: promote_staging_lead` to Persistence
 
 **Request:**
 
 ```json
 {
-  "action": "process_inbound",
-  "email_data": {
-    "from": "john@example.com",
-    "subject": "Interested in your product",
-    "body": "Hi, I saw your demo and...",
-    "message_id": "msg-123"
-  }
+  "intent": "qualify_lead",
+  "staging_lead_id": "uuid-staging-lead",
+  "campaign_id": "uuid-campaign-optional"
 }
 ```
 
-**Response:**
+**Response (summary):**
 
 ```json
 {
-  "status": "success",
-  "result": {
-    "lead_id": "uuid-lead",
-    "reply_packet": {
-      "lead_id": "uuid-lead",
-      "lead_source": "staging_leads",
-      "context": {...},
-      "thread_id": "uuid-conv",
-      "query_trace": {...}
-    }
-  }
+  "success": true,
+  "orchestrator": "leads",
+  "path": "qualify_lead",
+  "staging_lead_id": "uuid-staging-lead",
+  "qualification": {
+    "score": 92,
+    "decision": "fast_track",
+    "promote": true
+  },
+  "promoted": true
 }
 ```
+
+### Deep reply flow (`context_depth: deep` + `email_event`)
+
+When `context_depth` is `deep` and an `email_event` is present, LeadsOrchestrator can build a `reply_packet` containing:
+
+- lead resolution (`leads` vs `staging_leads`)
+- conversation context (recent messages)
+- extracted facts + query trace
+
+This `reply_packet` is returned to Manager so Manager can vertically chain to Outreach (Tier 2) for drafting.
 
 ### `enrich_lead`
 
@@ -109,7 +208,7 @@ Processing an inbound email:
 1. Receive task: process_inbound
    ↓
 2. Check if lead exists
-   → RAGAgent: get_lead_context (cascade lookup)
+  → RAGAgent: build_reply_context (thread_id → subject → recency)
    ↓
 3. If new lead:
    → PersistenceAgent: create staging_lead
@@ -121,6 +220,20 @@ Processing an inbound email:
 5. Build reply_packet with context
    ↓
 6. Return result to Manager
+```
+
+When a lead becomes qualified:
+
+```
+1. Receive task: intent=qualify_lead (staging_lead_id)
+   ↓
+2. RAGAgent: get_lead_context (deep)
+   ↓
+3. Compute qualification score (rules + optional LLM fallback)
+   ↓
+4. If score >= auto_promote (default 70):
+   → PersistenceAgent: operation=promote_staging_lead
+
 ```
 
 ## DeepAgent Tools
@@ -158,11 +271,23 @@ The `reply_packet` enables chained workflows:
 
 ```python
 class ReplyPacket(BaseModel):
-    lead_id: str
-    lead_source: str  # "leads" or "staging_leads"
-    context: dict     # Lead data + enrichment
-    thread_id: str    # Conversation ID
-    query_trace: dict # RAG debugging info
+  # High-level lead match and provenance
+  lead_resolution: dict  # status, lead_id, source, lead_data
+
+  # Conversation summary used for reply drafting
+  conversation: dict     # includes recent_messages
+
+  # Extracted facts for personalization
+  facts: dict            # first_name, last_name, company, role, email, intent
+
+  # What the system did + what to do next
+  actions_taken: dict
+  inbound_email_event: dict
+  recommended_strategy: str
+  next: dict
+
+  # Deep query trace for debugging
+  query_trace: dict
 ```
 
 This is passed to Outreach Orchestrator for reply drafting.
@@ -209,11 +334,12 @@ LeadsOrchestrator can **only** communicate:
 
 ## Configuration
 
-| Variable             | Default       | Description             |
-| -------------------- | ------------- | ----------------------- |
-| `TENANT_ID`          | `agentic-dev` | Tenant identifier       |
-| `RAG_TIMEOUT`        | `30s`         | RAG agent timeout       |
-| `ENRICHMENT_SOURCES` | `[]`          | Enabled enrichment APIs |
+| Variable                      | Default       | Description                         |
+| ----------------------------- | ------------- | ----------------------------------- |
+| `TENANT_ID`                   | `agentic-dev` | Tenant identifier                   |
+| `LEADS_WAIT_FOR_RAG_CONTEXT`  | `1`           | Whether Leads waits for RAG context |
+| `LEADS_RAG_CONTEXT_TIMEOUT_S` | `20`          | RAG wait timeout (seconds)          |
+| `ENRICHMENT_SOURCES`          | `[]`          | Enabled enrichment APIs             |
 
 ## Running
 

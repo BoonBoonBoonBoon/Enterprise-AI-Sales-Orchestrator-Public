@@ -22,11 +22,19 @@ Guides for deploying the Agentic System to various environments.
 
   [:octicons-arrow-right-24: Kubernetes Guide](kubernetes.md)
 
+- :simple-helm:{ .lg .middle } **Helm Chart**
+
+  ***
+
+  One-command deployment with parameterized values.
+
+  [:octicons-arrow-right-24: Helm Guide](helm.md)
+
 - :material-pipe:{ .lg .middle } **CI/CD**
 
   ***
 
-  Automated testing and deployment pipelines.
+  Automated testing and deployment pipelines (GitLab).
 
   [:octicons-arrow-right-24: CI/CD Guide](ci-cd.md)
 
@@ -40,6 +48,19 @@ Guides for deploying the Agentic System to various environments.
 
 </div>
 
+## Recommended Path
+
+```mermaid
+graph LR
+    A[Development] -->|docker-compose| B[Local Testing]
+    B -->|GitLab CI| C[Build & Test]
+    C -->|Helm| D[Staging K8s]
+    D -->|Manual Approve| E[Production K8s]
+```
+
+!!! tip "Production Recommendation"
+Use the **Helm chart** (`charts/agentic-system/`) for production deployments. It bundles all K8s resources with sensible defaults and easy customization.
+
 ## Deployment Architecture
 
 ```
@@ -47,21 +68,21 @@ Guides for deploying the Agentic System to various environments.
 │                    Production Setup                          │
 │                                                              │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │   GitHub     │───▶│   CI/CD      │───▶│  Container   │  │
-│  │   (source)   │    │  (build)     │    │  Registry    │  │
+│  │   GitLab     │───▶│   CI/CD      │───▶│  Container   │  │
+│  │   (source)   │    │  (lint+test) │    │  Registry    │  │
 │  └──────────────┘    └──────────────┘    └──────────────┘  │
 │                                                   │          │
 │                                                   ▼          │
 │                              ┌────────────────────────────┐ │
 │                              │       Kubernetes           │ │
-│                              │                            │ │
+│                              │       (via Helm)           │ │
 │                              │  ┌────────┐ ┌────────┐    │ │
 │                              │  │ Agent  │ │ Agent  │    │ │
 │                              │  │  Pod   │ │  Pod   │    │ │
 │                              │  └────────┘ └────────┘    │ │
 │                              │                            │ │
 │                              │  ┌────────────────────┐   │ │
-│                              │  │       Redis        │   │ │
+│                              │  │   Redis Cloud (TLS) │   │ │
 │                              │  └────────────────────┘   │ │
 │                              │                            │ │
 │                              └────────────────────────────┘ │
@@ -77,13 +98,13 @@ Guides for deploying the Agentic System to various environments.
 
 ## Environment Comparison
 
-| Aspect           | Docker Compose  | Kubernetes  |
-| ---------------- | --------------- | ----------- |
-| **Complexity**   | Low             | High        |
-| **Scalability**  | Limited         | Excellent   |
-| **Best For**     | Dev, small prod | Large prod  |
-| **Cost**         | Low             | Higher      |
-| **Ops Overhead** | Minimal         | Significant |
+| Aspect           | Docker Compose  | Kubernetes (Helm)  |
+| ---------------- | --------------- | ------------------ |
+| **Complexity**   | Low             | Medium (with Helm) |
+| **Scalability**  | Limited         | Excellent          |
+| **Best For**     | Dev, small prod | Large prod, SaaS   |
+| **Cost**         | Low             | Higher             |
+| **Ops Overhead** | Minimal         | Moderate           |
 
 ## Quick Start
 
@@ -94,11 +115,13 @@ Guides for deploying the Agentic System to various environments.
 docker-compose up -d
 ```
 
-### Production (K8s)
+### Production (Helm)
 
 ```bash
-# Apply manifests
-kubectl apply -k k8s/overlays/production
+# Deploy with Helm
+helm upgrade --install agentic charts/agentic-system \
+  --namespace agentic-system \
+  --create-namespace
 ```
 
 ## Prerequisites

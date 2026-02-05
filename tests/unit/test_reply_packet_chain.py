@@ -48,7 +48,7 @@ def patch_deep_agent(monkeypatch):
     # Avoid starting metrics server in ManagerAgent init
     monkeypatch.setattr(
         "tiers.tier_1.manager.manager_agent.start_metrics_server",
-        lambda: None,
+        lambda *args, **kwargs: None,
         raising=False,
     )
 

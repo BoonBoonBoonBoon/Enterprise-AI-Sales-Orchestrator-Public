@@ -11,6 +11,55 @@ from datetime import datetime
 from typing import Dict, Any, Tuple, Optional
 from pathlib import Path
 
+try:
+    # Reuse the project's adapter (SDK + REST fallback).
+    from services.persistence.adapters.supabase_adapter import SupabaseAdapter as _SupabaseAdapter
+except Exception:
+    _SupabaseAdapter = None
+
+try:
+    # Fallback for the internal_frontend Docker image which may not have repo-root imports.
+    from supabase import create_client as _create_supabase_client
+    from supabase import ClientOptions as _SupabaseClientOptions
+except Exception:
+    _create_supabase_client = None
+    _SupabaseClientOptions = None
+
+
+class _SupabaseBrowser:
+    """Minimal wrapper matching the adapter's `query()` shape used by the UI."""
+
+    def __init__(self, client):
+        self._client = client
+
+    def query(
+        self,
+        table: str,
+        filters: Optional[Dict[str, Any]] = None,
+        order_by: Optional[str] = None,
+        descending: bool = False,
+        limit: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        q = self._client.table(table).select("*")
+
+        for key, value in (filters or {}).items():
+            if value is None:
+                q = q.is_(key, "null")
+            else:
+                q = q.eq(key, value)
+
+        if order_by:
+            q = q.order(order_by, desc=bool(descending))
+        if limit:
+            q = q.limit(int(limit))
+
+        resp = q.execute()
+        data = getattr(resp, "data", None)
+        error = getattr(resp, "error", None)
+        if error:
+            raise RuntimeError(str(error))
+        return {"data": data}
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -114,6 +163,49 @@ def get_redis_client(redis_url: str, host: str, port: int) -> Optional[redis.Red
         return None
 
 r = get_redis_client(redis_url, redis_host, int(redis_port))
+
+
+@st.cache_resource
+def get_supabase_adapter(tenant_id: str):
+    """Create a Supabase adapter for read-only admin browsing.
+
+    Prefers service_role key when available; falls back to custom JWT if configured.
+    """
+    supabase_url = (os.environ.get("SUPABASE_URL") or "").strip()
+    supabase_service_or_key = (
+        os.environ.get("SUPABASE_SERVICE_KEY")
+        or os.environ.get("SUPABASE_KEY")
+        or ""
+    ).strip()
+    supabase_anon_key = (os.environ.get("SUPABASE_ANON_KEY") or "").strip()
+    supabase_persistence_jwt = (os.environ.get("SUPABASE_PERSISTENCE_JWT") or "").strip()
+
+    if not supabase_url or not (supabase_service_or_key or supabase_anon_key):
+        return None
+
+    using_custom_jwt = bool(supabase_persistence_jwt and supabase_anon_key)
+
+    if _SupabaseAdapter is not None:
+        try:
+            if using_custom_jwt:
+                return _SupabaseAdapter(supabase_url, supabase_persistence_jwt, anon_key=supabase_anon_key)
+            return _SupabaseAdapter(supabase_url, supabase_service_or_key)
+        except Exception:
+            return None
+
+    if _create_supabase_client is None:
+        return None
+
+    try:
+        if using_custom_jwt and _SupabaseClientOptions is not None:
+            opts = _SupabaseClientOptions(headers={"Authorization": f"Bearer {supabase_persistence_jwt}"})
+            client = _create_supabase_client(supabase_url, supabase_anon_key, options=opts)
+        else:
+            key = supabase_service_or_key or supabase_anon_key
+            client = _create_supabase_client(supabase_url, key)
+        return _SupabaseBrowser(client)
+    except Exception:
+        return None
 
 # Mock Data Templates for Real-World Scenarios
 MOCK_TEMPLATES = {
@@ -391,8 +483,9 @@ else:
 st.divider()
 
 # Main Tabs
-tab1, tab2, tab2b, tab3, tab4, tab5 = st.tabs([
+tab1, tab_rag, tab2, tab2b, tab3, tab4, tab5 = st.tabs([
     "📤 Submit Task", 
+    "🧠 RAG Tester",
     "📊 Stream Monitor", 
     "🔄 Task Flow Trace", 
     "🏗️ Architecture", 
@@ -870,6 +963,196 @@ with tab1:
                 st.markdown(f'<div class="error-box"><strong>❌ Error:</strong> {str(e)}</div>', unsafe_allow_html=True)
 
 # ============================================================================
+# TAB RAG: RAG TESTER
+# ============================================================================
+with tab_rag:
+    st.header("🧠 RAG Tester")
+    st.markdown(
+        "Send a minimal typed envelope directly to the RAG agent stream, without running Manager/Orchestrators."
+    )
+
+    rag_task_stream = f"{tenant_id}:agents:rag:tasks"
+    rag_result_stream = f"{tenant_id}:agents:rag:results"
+
+    col1, col2 = st.columns([3, 2])
+    with col1:
+        rag_goal = st.text_area(
+            "Goal",
+            value="Summarize the latest conversation context for lead_id=<UUID>.",
+            height=120,
+        )
+        entity_type = st.selectbox(
+            "Entity type",
+            ["lead", "staging_lead", "conversation", "message", "client", "campaign"],
+            index=0,
+        )
+        record_json = st.text_area(
+            "Record (JSON, optional)",
+            value="{}",
+            height=180,
+            help="Optional structured record. Leave {} if you just want the RAG agent to use retrieval tools based on your goal.",
+        )
+
+    with col2:
+        st.markdown("**Streams**")
+        st.code(rag_task_stream)
+        st.code(rag_result_stream)
+
+        rag_source = st.text_input("Envelope source", value="internal-frontend")
+        rag_destination = st.text_input("Envelope destination", value="rag_agent")
+        rag_tags_json = st.text_area("Tags (JSON)", value="{}", height=120)
+
+    send_col1, send_col2 = st.columns([1, 1])
+    with send_col1:
+        send_rag = st.button("📨 Send to RAG")
+    with send_col2:
+        clear_last = st.button("🧹 Clear last task")
+
+    if clear_last:
+        st.session_state.pop("rag_last_task_id", None)
+        st.session_state.pop("rag_last_message_id", None)
+
+    if send_rag:
+        try:
+            try:
+                record = json.loads(record_json) if record_json.strip() else {}
+            except Exception as e:
+                st.markdown(
+                    f'<div class="error-box"><strong>❌ Invalid Record JSON:</strong> {str(e)}</div>',
+                    unsafe_allow_html=True,
+                )
+                record = None
+
+            if record is None:
+                st.stop()
+
+            try:
+                tags = json.loads(rag_tags_json) if rag_tags_json.strip() else {}
+                if not isinstance(tags, dict):
+                    raise ValueError("Tags must be a JSON object")
+            except Exception as e:
+                st.markdown(
+                    f'<div class="error-box"><strong>❌ Invalid Tags JSON:</strong> {str(e)}</div>',
+                    unsafe_allow_html=True,
+                )
+                st.stop()
+
+            task_id = str(uuid.uuid4())
+            correlation_id = str(uuid.uuid4())
+
+            envelope_obj = {
+                "metadata": {
+                    "task_id": task_id,
+                    "source": rag_source,
+                    "destination": rag_destination,
+                    "tenant_id": tenant_id,
+                    "correlation_id": correlation_id,
+                    "tags": tags,
+                },
+                "payload": {
+                    "goal": rag_goal,
+                    "entity_type": entity_type,
+                    "record": record,
+                    "task_id": task_id,
+                    "correlation_id": correlation_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+            }
+
+            msg_id = r.xadd(rag_task_stream, {"data": json.dumps(envelope_obj)})
+
+            st.session_state["rag_last_task_id"] = task_id
+            st.session_state["rag_last_message_id"] = msg_id
+
+            st.markdown(
+                f"""
+                <div class="success-box">
+                    <strong>✅ RAG Task Sent!</strong><br>
+                    <strong>Task ID:</strong> <code>{task_id}</code><br>
+                    <strong>Correlation ID:</strong> <code>{correlation_id}</code><br>
+                    <strong>Stream:</strong> <code>{rag_task_stream}</code><br>
+                    <strong>Message ID:</strong> <code>{msg_id}</code>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if debug_mode or show_raw_json:
+                st.json(envelope_obj)
+
+        except Exception as e:
+            st.markdown(
+                f'<div class="error-box"><strong>❌ Error:</strong> {str(e)}</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.divider()
+    st.subheader("📥 Fetch Result")
+
+    default_task_id = st.session_state.get("rag_last_task_id", "")
+    lookup_task_id = st.text_input("Task ID to look up", value=default_task_id)
+
+    poll_col1, poll_col2, poll_col3 = st.columns([1, 1, 2])
+    with poll_col1:
+        poll_seconds = st.number_input("Poll (seconds)", min_value=1, max_value=60, value=15)
+    with poll_col2:
+        poll_interval = st.number_input("Interval (seconds)", min_value=0.2, max_value=5.0, value=0.5)
+    with poll_col3:
+        poll_now = st.button("🔎 Poll for Result")
+
+    def _find_rag_result(task_id: str) -> Optional[Dict[str, Any]]:
+        if not task_id:
+            return None
+        try:
+            messages = r.xrevrange(rag_result_stream, count=200)
+        except Exception:
+            return None
+
+        for _msg_id, fields in messages:
+            data = fields.get("data")
+            if not data:
+                continue
+            try:
+                env = json.loads(data) if isinstance(data, str) else data
+            except Exception:
+                continue
+            meta = (env or {}).get("metadata") or {}
+            if meta.get("task_id") == task_id:
+                return env
+        return None
+
+    if poll_now:
+        if not lookup_task_id:
+            st.info("Enter a Task ID to look up.")
+        else:
+            found = None
+            started = time.time()
+            while time.time() - started < float(poll_seconds):
+                found = _find_rag_result(lookup_task_id)
+                if found:
+                    break
+                time.sleep(float(poll_interval))
+
+            if not found:
+                st.warning(
+                    f"No result found yet in {rag_result_stream} for task_id={lookup_task_id}."
+                )
+            else:
+                payload = (found.get("payload") or {})
+                st.markdown(
+                    f"""
+                    <div class="info-box">
+                        <strong>✅ Result found</strong><br>
+                        <strong>Status:</strong> <code>{found.get('status')}</code><br>
+                        <strong>Source:</strong> <code>{(found.get('metadata') or {}).get('source')}</code>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.markdown("**Result payload:**")
+                st.json(payload)
+
+# ============================================================================
 # TAB 2: STREAM MONITOR
 # ============================================================================
 with tab2:
@@ -884,7 +1167,8 @@ with tab2:
             f"{tenant_id}:orchestrators:leads:results",
             f"{tenant_id}:agents:persistence:tasks",
             f"{tenant_id}:agents:copywriter:tasks",
-            f"{tenant_id}:agents:rag:tasks"
+            f"{tenant_id}:agents:rag:tasks",
+            f"{tenant_id}:agents:rag:results",
         ]
         selected_stream = st.selectbox("📡 Stream:", default_streams, index=1)
     with col2:
@@ -1146,7 +1430,7 @@ with tab4:
     
     debug_section = st.radio(
         "Debug Tool:", 
-        ["🔧 Redis Info", "📊 Stream Analysis", "🔍 Message Inspector", "📝 Logs"],
+        ["🔧 Redis Info", "📊 Stream Analysis", "🔍 Message Inspector", "🗄️ DB Browser", "📝 Logs"],
         horizontal=True
     )
     
@@ -1262,6 +1546,146 @@ with tab4:
             except Exception as e:
                 st.error(f"Error: {e}")
     
+    elif debug_section == "🗄️ DB Browser":
+        st.subheader("🗄️ Database Browser (Conversations → Messages)")
+
+        supa = get_supabase_adapter(tenant_id)
+        if not supa:
+            st.markdown(
+                """
+                <div class="warning-box">
+                    <strong>Supabase not configured.</strong><br/>
+                    Set <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_KEY</code> (or <code>SUPABASE_KEY</code>) in your environment.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            mode = st.radio(
+                "Browse mode:",
+                ["Staging (staging_leads → staging_conversations → staging_messages)", "Production (leads → conversations → messages)"],
+                horizontal=False,
+            )
+
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                email = st.text_input("Lead email", value="", help="Search by lead email (recommended)")
+            with col2:
+                run_lookup = st.button("🔎 Find", use_container_width=True)
+
+            if run_lookup:
+                email_norm = (email or "").strip()
+                if not email_norm:
+                    st.error("Please enter an email.")
+                else:
+                    try:
+                        client_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, tenant_id))
+
+                        if mode.startswith("Staging"):
+                            leads = supa.query(
+                                table="staging_leads",
+                                filters={"client_id": client_uuid, "email": email_norm},
+                            )
+                            if isinstance(leads, dict):
+                                leads = leads.get("data", [])
+                            leads = [l for l in (leads or []) if not l.get("archived_at")]
+                            if not leads:
+                                st.warning("No active staging lead found for that email.")
+                            else:
+                                lead = sorted(leads, key=lambda x: x.get("created_at") or "")[0]
+                                st.success(f"Staging lead found: {lead.get('id')}")
+
+                                convos = supa.query(
+                                    table="staging_conversations",
+                                    filters={"staging_lead_id": lead.get("id")},
+                                    order_by="last_message_at",
+                                    descending=True,
+                                    limit=200,
+                                )
+                                if isinstance(convos, dict):
+                                    convos = convos.get("data", [])
+                                convos = [c for c in (convos or []) if not c.get("archived_at")]
+
+                                if not convos:
+                                    st.info("No staging conversations found for this lead.")
+                                else:
+                                    options = {
+                                        f"{c.get('subject') or '(no subject)'} | {c.get('status')} | msgs={c.get('message_count', 0)} | last={c.get('last_message_at') or c.get('updated_at')}": c
+                                        for c in convos
+                                    }
+                                    selected_label = st.selectbox("Conversation", list(options.keys()))
+                                    convo = options[selected_label]
+                                    st.caption(f"Conversation id: {convo.get('id')}")
+
+                                    msgs = supa.query(
+                                        table="staging_messages",
+                                        filters={"staging_conversation_id": convo.get("id")},
+                                        order_by="sent_at",
+                                        descending=False,
+                                        limit=500,
+                                    )
+                                    if isinstance(msgs, dict):
+                                        msgs = msgs.get("data", [])
+                                    msgs = [m for m in (msgs or []) if not m.get("archived_at")]
+                                    if not msgs:
+                                        st.info("No messages found for this conversation.")
+                                    else:
+                                        df = pd.DataFrame(msgs)
+                                        # Make it readable: keep key columns first
+                                        cols = [c for c in ["sent_at", "direction", "sender", "receiver", "message_id", "content"] if c in df.columns]
+                                        cols += [c for c in df.columns if c not in cols]
+                                        st.dataframe(df[cols], use_container_width=True, hide_index=True)
+
+                        else:
+                            leads = supa.query(table="leads", filters={"email": email_norm}, limit=10)
+                            if isinstance(leads, dict):
+                                leads = leads.get("data", [])
+                            if not leads:
+                                st.warning("No lead found for that email in production leads.")
+                            else:
+                                lead = leads[0]
+                                st.success(f"Lead found: {lead.get('id')}")
+
+                                convos = supa.query(
+                                    table="conversations",
+                                    filters={"lead_id": lead.get("id")},
+                                    order_by="created_at",
+                                    descending=True,
+                                    limit=200,
+                                )
+                                if isinstance(convos, dict):
+                                    convos = convos.get("data", [])
+                                if not convos:
+                                    st.info("No conversations found for this lead.")
+                                else:
+                                    options = {
+                                        f"{c.get('subject') or '(no subject)'} | {c.get('status')} | {c.get('channel')} | created={c.get('created_at')}": c
+                                        for c in convos
+                                    }
+                                    selected_label = st.selectbox("Conversation", list(options.keys()))
+                                    convo = options[selected_label]
+                                    st.caption(f"Conversation id: {convo.get('id')}")
+
+                                    msgs = supa.query(
+                                        table="messages",
+                                        filters={"conversation_id": convo.get("id")},
+                                        order_by="created_at",
+                                        descending=False,
+                                        limit=500,
+                                    )
+                                    if isinstance(msgs, dict):
+                                        msgs = msgs.get("data", [])
+                                    if not msgs:
+                                        st.info("No messages found for this conversation.")
+                                    else:
+                                        df = pd.DataFrame(msgs)
+                                        cols = [c for c in ["created_at", "sender_type", "message_id", "text_content"] if c in df.columns]
+                                        cols += [c for c in df.columns if c not in cols]
+                                        st.dataframe(df[cols], use_container_width=True, hide_index=True)
+
+                    except Exception as exc:
+                        st.error(f"DB lookup failed: {exc}")
+
     else:  # Logs
         st.subheader("📝 Application Logs")
         

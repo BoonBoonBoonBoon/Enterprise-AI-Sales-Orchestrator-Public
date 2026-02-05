@@ -37,14 +37,22 @@ Complete reference for Redis Stream key naming conventions.
 
 ### Agents (Tier 3)
 
-| Stream                                | Purpose                 |
-| ------------------------------------- | ----------------------- |
-| `{tenant}:agents:rag:tasks`           | Context retrieval tasks |
-| `{tenant}:agents:rag:results`         | Retrieved context       |
-| `{tenant}:agents:persistence:tasks`   | CRUD operations         |
-| `{tenant}:agents:persistence:results` | CRUD results            |
-| `{tenant}:agents:copywriter:tasks`    | Content generation      |
-| `{tenant}:agents:copywriter:results`  | Generated content       |
+| Stream                                | Purpose                  |
+| ------------------------------------- | ------------------------ |
+| `{tenant}:agents:rag:tasks`           | Context retrieval tasks  |
+| `{tenant}:agents:rag:results`         | Retrieved context        |
+| `{tenant}:agents:persistence:tasks`   | CRUD operations          |
+| `{tenant}:agents:persistence:results` | CRUD results             |
+| `{tenant}:agents:copywriter:tasks`    | Content generation       |
+| `{tenant}:agents:copywriter:results`  | Generated content        |
+| `{tenant}:agents:sequencing:tasks`    | Channel sequencing tasks |
+| `{tenant}:agents:sequencing:results`  | Sequencing results       |
+
+## Non-Stream Keys
+
+Some workflows use Redis hashes for small pieces of state (not streams). For example, Outreach auto-send stores routing context here:
+
+- `{tenant}:outreach:auto_send` (Redis hash keyed by `copy_task_id`)
 
 ## Building Keys
 

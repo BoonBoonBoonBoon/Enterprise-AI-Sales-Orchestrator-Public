@@ -11,49 +11,73 @@ Every message flowing through Redis Streams uses a consistent envelope format, e
 - **Metadata propagation** — Context flows through the system
 - **Type safety** — Pydantic models validate structure
 
-## TaskEnvelope
+## Envelope (Task)
 
-Sent when requesting work from an agent or orchestrator.
+Sent when requesting work from an agent or orchestrator. The canonical format is the typed
+`Envelope` (core/envelope/typed_envelope.py).
 
 ### Schema
 
 ```python
 from pydantic import BaseModel, Field
-from typing import Optional, Any
+from typing import Optional, Any, Dict, List
 from datetime import datetime
+from enum import Enum
 import uuid
 
-class Metadata(BaseModel):
-    source: str = Field(..., description="Component that created this task")
-    target: Optional[str] = Field(None, description="Intended recipient")
-    correlation_id: Optional[str] = Field(None, description="Links related tasks")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    debug: Optional[dict] = Field(None, description="Debug info (e.g., llm_summary)")
+class Status(str, Enum):
+  PENDING = "pending"
+  SUCCESS = "success"
+  ERROR = "error"
+  RETRY = "retry"
+  DLQ = "dlq"
 
-class TaskEnvelope(BaseModel):
-    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    tenant_id: str = Field(..., description="Tenant identifier")
-    payload: dict = Field(..., description="Task-specific data")
-    metadata: Metadata = Field(default_factory=Metadata)
+class Metadata(BaseModel):
+  message_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+  task_id: str
+  correlation_id: Optional[str] = None
+  source: str
+  destination: Optional[str] = None
+  created_at: datetime = Field(default_factory=datetime.utcnow)
+  processed_at: Optional[datetime] = None
+  req_id: Optional[str] = None
+  user_id: Optional[str] = None
+  tenant_id: Optional[str] = None
+  campaign_id: Optional[str] = None
+  priority: str = "normal"
+  retry_count: int = 0
+  max_retries: int = 3
+  tags: Dict[str, str] = Field(default_factory=dict)
+  debug: Optional[Dict[str, Any]] = None
+
+class Envelope(BaseModel):
+  metadata: Metadata
+  payload: Dict[str, Any] = Field(default_factory=dict)
+  status: Status = Status.PENDING
+  error: Optional[str] = None
+  error_code: Optional[str] = None
+  warnings: List[str] = Field(default_factory=list)
 ```
 
 ### Example
 
 ```json
 {
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "tenant_id": "agentic-dev",
+  "metadata": {
+    "message_id": "a1b2c3d4-e29b-41d4-a716-446655440000",
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "tenant_id": "agentic-dev",
+    "source": "leads_orchestrator",
+    "destination": "rag_agent",
+    "correlation_id": "flow-abc-123",
+    "created_at": "2026-01-13T10:30:00Z"
+  },
   "payload": {
     "action": "get_lead_context",
     "lead_id": "lead-123",
     "include_conversations": true
   },
-  "metadata": {
-    "source": "leads_orchestrator",
-    "target": "rag_agent",
-    "correlation_id": "flow-abc-123",
-    "timestamp": "2026-01-13T10:30:00Z"
-  }
+  "status": "pending"
 }
 ```
 
@@ -61,40 +85,33 @@ class TaskEnvelope(BaseModel):
 
 | Field                     | Type          | Required | Description                          |
 | ------------------------- | ------------- | -------- | ------------------------------------ |
-| `task_id`                 | string (UUID) | ✅       | Unique identifier for this task      |
-| `tenant_id`               | string        | ✅       | Tenant isolation key                 |
+| `metadata.task_id`        | string (UUID) | ✅       | Unique identifier for this task      |
+| `metadata.tenant_id`      | string        | ⚠️       | Tenant isolation key                 |
 | `payload`                 | object        | ✅       | Task-specific data (varies by agent) |
 | `metadata`                | object        | ✅       | Routing and tracing information      |
 | `metadata.source`         | string        | ✅       | Component that created the task      |
-| `metadata.target`         | string        | ⚠️       | Intended recipient (optional)        |
+| `metadata.destination`    | string        | ⚠️       | Intended recipient (optional)        |
 | `metadata.correlation_id` | string        | ⚠️       | Links related tasks in a workflow    |
-| `metadata.timestamp`      | datetime      | ⚠️       | When task was created                |
+| `metadata.created_at`     | datetime      | ⚠️       | When task was created                |
 | `metadata.debug`          | object        | ⚠️       | Debug info (kept brief)              |
+| `status`                  | enum          | ✅       | `pending`, `success`, `error`, etc.  |
 
-## ResultEnvelope
+## Envelope (Result)
 
-Returned after processing a task.
-
-### Schema
-
-```python
-class ResultEnvelope(BaseModel):
-    task_id: str = Field(..., description="Original task ID")
-    tenant_id: str = Field(..., description="Tenant identifier")
-    status: Literal["success", "error", "pending"] = Field(...)
-    result: Optional[dict] = Field(None, description="Successful result data")
-    error: Optional[dict] = Field(None, description="Error details if failed")
-    metadata: Metadata = Field(default_factory=Metadata)
-```
+Returned after processing a task. Uses the same `Envelope` type with `status=success` or `status=error`.
 
 ### Success Example
 
 ```json
 {
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "tenant_id": "agentic-dev",
-  "status": "success",
-  "result": {
+  "metadata": {
+    "message_id": "b2c3d4e5-e29b-41d4-a716-446655440000",
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "tenant_id": "agentic-dev",
+    "source": "rag_agent",
+    "created_at": "2026-01-13T10:30:05Z"
+  },
+  "payload": {
     "lead_context": {
       "name": "John Doe",
       "company": "Acme Inc",
@@ -102,10 +119,7 @@ class ResultEnvelope(BaseModel):
     },
     "completeness_score": 0.85
   },
-  "metadata": {
-    "source": "rag_agent",
-    "timestamp": "2026-01-13T10:30:05Z"
-  }
+  "status": "success"
 }
 ```
 
@@ -113,36 +127,33 @@ class ResultEnvelope(BaseModel):
 
 ```json
 {
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "tenant_id": "agentic-dev",
-  "status": "error",
-  "error": {
-    "code": "LEAD_NOT_FOUND",
-    "message": "Lead with ID 'lead-123' not found",
-    "details": {
-      "searched_tables": ["leads", "staging_leads"]
-    }
-  },
   "metadata": {
+    "message_id": "b2c3d4e5-e29b-41d4-a716-446655440000",
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "tenant_id": "agentic-dev",
     "source": "rag_agent",
-    "timestamp": "2026-01-13T10:30:02Z"
+    "created_at": "2026-01-13T10:30:02Z"
+  },
+  "status": "error",
+  "error": "Lead with ID 'lead-123' not found",
+  "error_code": "LEAD_NOT_FOUND",
+  "payload": {
+    "searched_tables": ["leads", "staging_leads"]
   }
 }
 ```
 
 ### Fields
 
-| Field           | Type   | Required | Description                        |
-| --------------- | ------ | -------- | ---------------------------------- |
-| `task_id`       | string | ✅       | Original task ID (for correlation) |
-| `tenant_id`     | string | ✅       | Tenant isolation key               |
-| `status`        | enum   | ✅       | `success`, `error`, or `pending`   |
-| `result`        | object | ⚠️       | Present when status is `success`   |
-| `error`         | object | ⚠️       | Present when status is `error`     |
-| `error.code`    | string | ⚠️       | Machine-readable error code        |
-| `error.message` | string | ⚠️       | Human-readable error message       |
-| `error.details` | object | ⚠️       | Additional error context           |
-| `metadata`      | object | ✅       | Routing and tracing information    |
+| Field                | Type   | Required | Description                         |
+| -------------------- | ------ | -------- | ----------------------------------- |
+| `metadata.task_id`   | string | ✅       | Original task ID (for correlation)  |
+| `metadata.tenant_id` | string | ⚠️       | Tenant isolation key                |
+| `status`             | enum   | ✅       | `success`, `error`, `pending`, etc. |
+| `payload`            | object | ⚠️       | Present for success results         |
+| `error`              | string | ⚠️       | Present when status is `error`      |
+| `error_code`         | string | ⚠️       | Machine-readable error code         |
+| `metadata`           | object | ✅       | Routing and tracing information     |
 
 ## ReplyPacket
 
@@ -184,26 +195,22 @@ class ReplyPacket(BaseModel):
 ### Publishing a Task
 
 ```python
-import json
+from core.envelope import task as create_task, to_redis_fields
 from services.redis.client import get_redis_client
 
 redis = get_redis_client()
 
-task = {
-    "task_id": "my-task-001",
-    "tenant_id": "agentic-dev",
-    "payload": {
-        "action": "process",
-        "data": {"key": "value"}
-    },
-    "metadata": {
-        "source": "my_component"
-    }
-}
+envelope = create_task(
+  source="my_component",
+  task_id="my-task-001",
+  payload={"action": "process", "data": {"key": "value"}},
+  destination="my_agent",
+  tenant_id="agentic-dev",
+)
 
 redis.xadd(
-    "agentic-dev:agents:my_agent:tasks",
-    {"data": json.dumps(task)}
+  "agentic-dev:agents:my_agent:tasks",
+  to_redis_fields(envelope)
 )
 ```
 
@@ -218,28 +225,24 @@ results = redis.xread(
 for stream, messages in results:
     for msg_id, data in messages:
         result = json.loads(data["data"])
-        if result["task_id"] == "my-task-001":
-            if result["status"] == "success":
-                print(result["result"])
-            else:
-                print(f"Error: {result['error']['message']}")
+        if result.get("metadata", {}).get("task_id") == "my-task-001":
+          if result["status"] == "success":
+            print(result["payload"])
+          else:
+            print(f"Error: {result.get('error')}")
 ```
 
 ### Validation with Pydantic
 
 ```python
-from core.envelope.task_envelope import TaskEnvelope, ResultEnvelope
+from core.envelope import Envelope
 
-# Validate incoming task
-task = TaskEnvelope(**raw_data)
+# Validate incoming envelope
+env = Envelope.model_validate(raw_data)
 
-# Create result
-result = ResultEnvelope(
-    task_id=task.task_id,
-    tenant_id=task.tenant_id,
-    status="success",
-    result={"processed": True}
-)
+# Create result (copy metadata fields as needed)
+env.status = "success"
+env.payload = {"processed": True}
 ```
 
 ## Best Practices

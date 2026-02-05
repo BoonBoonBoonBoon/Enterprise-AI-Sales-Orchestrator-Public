@@ -20,20 +20,39 @@ docker compose -f docker-compose.observability.yml up -d
 
 ### 3. Configure Your Services
 
-Add to your service environment variables:
+Each component automatically exposes metrics on its designated port:
+
+| Component             | Port | Endpoint              |
+| --------------------- | ---- | --------------------- |
+| Manager               | 8000 | `/metrics`, `/health` |
+| Leads Orchestrator    | 8010 | `/metrics`, `/health` |
+| Outreach Orchestrator | 8011 | `/metrics`, `/health` |
+| Inbound Orchestrator  | 8012 | `/metrics`, `/health` |
+| Control Orchestrator  | 8013 | `/metrics`, `/health` |
+| Audit Orchestrator    | 8014 | `/metrics`, `/health` |
+| Persistence Agent     | 8020 | `/metrics`, `/health` |
+| RAG Agent             | 8021 | `/metrics`, `/health` |
+| Copywriter Agent      | 8022 | `/metrics`, `/health` |
+| Channel Sequencer     | 8023 | `/metrics`, `/health` |
+| Classifier Agent      | 8024 | `/metrics`, `/health` |
+| Scheduler Agent       | 8025 | `/metrics`, `/health` |
+
+Override ports via environment variables:
 
 ```yaml
 environment:
-  - LOKI_URL=http://loki:3100/loki/api/v1/push
-  - METRICS_PORT=8000  # Expose /metrics endpoint
+  - METRICS_PORT_LEADS_ORCHESTRATOR=9010 # Component-specific override
+  - METRICS_PORT=8080 # Global fallback
+  - LOKI_URL=http://loki:3100/loki/api/v1/push # Enable Loki log push
 ```
 
 ### 4. View Pre-built Dashboards
 
 Navigate to Grafana → Dashboards → Agentic System folder:
+
 - Manager Agent (Tier 1)
-- Orchestrators (Tier 2) - *coming soon*
-- Agents (Tier 3) - *coming soon*
+- Orchestrators (Tier 2)
+- Agents (Tier 3)
 
 ---
 
@@ -58,11 +77,13 @@ Application Tier          Observability Tier
 ## Cost
 
 **Self-Hosted (Recommended)**:
+
 - Software: $0 (open-source)
 - Compute: ~$12-30/month (1 small VM) or $0 (on existing infrastructure)
 - Storage: <5GB for 30-day retention
 
 **vs. Managed Alternatives**:
+
 - DataDog: ~$100-300/month
 - New Relic: ~$99-299/month
 - CloudWatch: ~$50-150/month
@@ -74,11 +95,13 @@ Application Tier          Observability Tier
 ## Data Retention
 
 **Default Settings**:
+
 - Metrics (Prometheus): 30 days
 - Logs (Loki): 7 days
 - Traces (Tempo): 7 days
 
 **Adjust in config files**:
+
 - Prometheus: `deployment/prometheus/prometheus.yml` (--storage.tsdb.retention.time)
 - Loki: `deployment/loki/loki-config.yml` (retention_period)
 
@@ -89,30 +112,63 @@ Application Tier          Observability Tier
 ### Manager (Tier 1)
 
 **Counters**:
+
 - `manager_decisions_total{intent, tenant, component}` - Total decisions made
 - `manager_errors_total{component, tenant}` - Total errors
 - `manager_fallback_total{used_fallback, tenant}` - Fallback usage
 - `manager_cost_usd{tenant, component}` - Cumulative cost in USD
 
 **Histograms**:
+
 - `manager_latency_ms{component, tenant}` - Execution latency
 - `manager_confidence{tenant}` - Decision confidence scores
 
 **Gauges**:
+
 - `up{job="manager"}` - Service health (1=up, 0=down)
 
-### Orchestrators (Tier 2) - *Coming Soon*
+### Orchestrators (Tier 2)
 
-- `orchestrator_workflows_total`
-- `orchestrator_agents_delegated`
-- `orchestrator_state_transitions`
+Each orchestrator exposes metrics on a unique port:
 
-### Agents (Tier 3) - *Coming Soon*
+- `leads_orchestrator:8010/metrics`
+- `outreach_orchestrator:8011/metrics`
+- `inbound_orchestrator:8012/metrics`
+- `control_orchestrator:8013/metrics`
+- `audit_orchestrator:8014/metrics`
 
-- `agent_llm_calls_total`
-- `agent_tokens_input`
-- `agent_tokens_output`
-- `agent_tool_calls`
+**Counters**:
+
+- `orchestrator.decisions.total{intent, tenant, component}` - Total decisions
+- `orchestrator.errors.total{component, tenant}` - Total errors
+- `orchestrator.workflows_total{status, tenant}` - Workflow completions
+
+**Histograms**:
+
+- `orchestrator.latency_ms{component, tenant}` - Execution latency
+- `orchestrator.span_duration_ms{component, tenant, span}` - Individual operation latency
+
+### Agents (Tier 3)
+
+Each agent exposes metrics on a unique port:
+
+- `persistence_agent:8020/metrics`
+- `rag_agent:8021/metrics`
+- `copywriter_agent:8022/metrics`
+- `channel_sequencer_agent:8023/metrics`
+- `classifier_agent:8024/metrics`
+- `scheduler_agent:8025/metrics`
+
+**Counters**:
+
+- `agent.tasks.total{status, component}` - Task completions
+- `agent.errors.total{component, tenant}` - Total errors
+- `agent.llm_calls.total{model, component}` - LLM API calls
+
+**Histograms**:
+
+- `agent.latency_ms{component, tenant}` - Task execution latency
+- `agent.tokens_used{type, component}` - Token usage (input/output)
 
 ---
 
@@ -138,6 +194,7 @@ All logs are JSON-formatted and pushed to Loki with labels:
 ```
 
 **Query examples in Grafana Explore**:
+
 ```logql
 # All manager decisions
 {tier="manager",event="decision"}
@@ -212,6 +269,7 @@ rate(manager_cost_usd[1h])
 If Tempo is enabled and instrumented:
 
 In Grafana → Explore → Tempo:
+
 - Search by `execution_id` or `tenant_id`
 - View full trace timeline
 
@@ -237,7 +295,7 @@ def execute(self, task):
     ) as obs:
         # Do work
         result = self._process(task)
-        
+
         # Log decision
         obs.log_decision(
             intent="outreach",
@@ -245,10 +303,10 @@ def execute(self, task):
             used_fallback=False,
             reasons=["rules:keyword:outreach"],
         )
-        
+
         # Track cost
         obs.track_cost(0.0002)
-        
+
         return result
 ```
 
@@ -259,6 +317,7 @@ def execute(self, task):
 ### Grafana can't connect to Prometheus
 
 **Check**:
+
 ```bash
 docker exec -it agentic_grafana curl http://prometheus:9090/api/v1/status/config
 ```
@@ -268,6 +327,7 @@ docker exec -it agentic_grafana curl http://prometheus:9090/api/v1/status/config
 ### No metrics appearing
 
 **Check**:
+
 1. Is the `/metrics` endpoint exposed? `curl http://localhost:8000/metrics`
 2. Is Prometheus scraping? Check http://localhost:9090/targets
 3. Are metric names correct? Check Prometheus → Graph → Metrics
@@ -275,6 +335,7 @@ docker exec -it agentic_grafana curl http://prometheus:9090/api/v1/status/config
 ### Loki not receiving logs
 
 **Check**:
+
 1. Is LOKI_URL set in application env?
 2. Is Promtail running? `docker logs agentic_promtail`
 3. Test direct push:
@@ -287,6 +348,7 @@ docker exec -it agentic_grafana curl http://prometheus:9090/api/v1/status/config
 ### High memory usage
 
 **Adjust retention**:
+
 - Prometheus: Lower `--storage.tsdb.retention.time` in docker-compose
 - Loki: Lower `retention_period` in loki-config.yml
 
@@ -300,7 +362,7 @@ docker exec -it agentic_grafana curl http://prometheus:9090/api/v1/status/config
 # Change default Grafana password
 environment:
   - GF_SECURITY_ADMIN_PASSWORD=<strong-password>
-  
+
 # Enable HTTPS (use nginx reverse proxy)
 # Restrict network access (firewall rules)
 ```

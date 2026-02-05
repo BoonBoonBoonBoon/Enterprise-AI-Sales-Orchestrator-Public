@@ -11,7 +11,6 @@ Practical, task-oriented guides for developing, operating, and deploying the Age
   ***
 
   Build and extend the system with new agents, orchestrators, and features.
-
   - [Adding a New Agent](dev/new-agent.md)
   - [Adding an Orchestrator](dev/new-orchestrator.md)
   - [Writing Tests](dev/testing.md)
@@ -22,7 +21,6 @@ Practical, task-oriented guides for developing, operating, and deploying the Age
   ***
 
   Run, monitor, and troubleshoot the system in development and production.
-
   - [Running Consumers](ops/consumers.md)
   - [Monitoring](ops/monitoring.md)
   - [Troubleshooting](ops/troubleshooting.md)
@@ -33,7 +31,6 @@ Practical, task-oriented guides for developing, operating, and deploying the Age
   ***
 
   Deploy the system to various environments using Docker, Kubernetes, or cloud platforms.
-
   - [Docker Compose](deploy/docker.md)
   - [Kubernetes](deploy/kubernetes.md)
   - [CI/CD](deploy/ci-cd.md)
@@ -45,13 +42,15 @@ Practical, task-oriented guides for developing, operating, and deploying the Age
 
 ### Most Common Tasks
 
-| Task                        | Guide                                     |
-| --------------------------- | ----------------------------------------- |
-| Add a new Tier 3 agent      | [Adding a New Agent](dev/new-agent.md)    |
-| Start all consumers locally | [Running Consumers](ops/consumers.md)     |
-| Debug a failing task        | [Troubleshooting](ops/troubleshooting.md) |
-| Deploy with Docker          | [Docker Compose](deploy/docker.md)        |
-| Run the test suite          | [Writing Tests](dev/testing.md)           |
+| Task                        | Guide                                                                 |
+| --------------------------- | --------------------------------------------------------------------- |
+| Add a new Tier 3 agent      | [Adding a New Agent](dev/new-agent.md)                                |
+| Start all consumers locally | [Running Consumers](ops/consumers.md)                                 |
+| Debug a failing task        | [Troubleshooting](ops/troubleshooting.md)                             |
+| Understand staging → leads  | [Staging & Deduplication](staging-deduplication.md)                   |
+| Pricing & competitor notes  | [Pricing & Competitive Research](pricing-and-competitive-research.md) |
+| Deploy with Docker          | [Docker Compose](deploy/docker.md)                                    |
+| Run the test suite          | [Writing Tests](dev/testing.md)                                       |
 
 ### Development Workflow
 

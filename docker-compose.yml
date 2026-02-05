@@ -1,4 +1,4 @@
-﻿###################################################################################################
+###################################################################################################
 # docker-compose.yml (Annotated)
 # -------------------------------------------------------------------------------------------------
 # Purpose: Define a local development stack consisting of:
@@ -75,7 +75,7 @@ services:
   worker:
     build:
       context: .                          # Build context root (sends only needed files per .dockerignore)
-      dockerfile: Dockerfile              # Explicit Dockerfile (default, but stated for clarity)
+      dockerfile: deployment/docker/Dockerfile.worker  # Unified worker Dockerfile
     image: agentic/worker:dev             # Tag applied locally after build; can push to registry later
   # container_name removed to allow scaling multiple replicas without name conflicts
     env_file:
@@ -85,7 +85,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}       # Provided via host .env
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>     # Use Cloud if provided, else Compose Redis
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}     # Use Cloud if provided, else Compose Redis
       # Redis Streams configuration
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
       REDIS_GROUP_WRITERS: ${REDIS_GROUP_WRITERS:-persist-writers}
@@ -96,7 +96,7 @@ services:
       WORKER_ONCE: ${WORKER_ONCE:-0}
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}  # Enable operational heartbeats
     # No hard dependency on the local redis service so Cloud can be used seamlessly.
-    command: ["python", "-m", "agent.operational_agents.persistence_agent.write_worker"]
+    command: ["python", "-m", "tiers.tier_3.persistence_agent.write_worker"]
     restart: unless-stopped               # Resilient to crashes during dev
     deploy:
       resources:
@@ -120,7 +120,7 @@ services:
   rag_worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: deployment/docker/Dockerfile.worker
     image: agentic/worker:dev
     env_file:
       - .env
@@ -128,7 +128,9 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       # Redis Streams configuration (RAG path)
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
       REDIS_GROUP_WORKERS: ${REDIS_GROUP_WORKERS:-rag-workers}
@@ -140,7 +142,7 @@ services:
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}  # Enable operational heartbeats
       REDIS_DEBUG: ${REDIS_DEBUG:-1}
     # No depends_on to allow Cloud Redis; if using local profile, Redis will be available as well.
-    command: ["python", "-m", "agent.operational_agents.rag_agent.worker"]
+    command: ["python", "-m", "tiers.tier_3.rag_agent.consumer"]
     restart: unless-stopped
     deploy:
       resources:
@@ -162,7 +164,7 @@ services:
   persistence_worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: deployment/docker/Dockerfile.worker
     image: agentic/worker:dev
     env_file:
       - .env
@@ -170,7 +172,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -179,7 +181,7 @@ services:
       WORKER_ONCE: ${WORKER_ONCE:-0}
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
       REDIS_DEBUG: ${REDIS_DEBUG:-1}
-    command: ["python", "-m", "agent.operational_agents.persistence_agent.consumer"]
+    command: ["python", "-m", "tiers.tier_3.persistence_agent.consumer"]
     restart: unless-stopped
     deploy:
       resources:
@@ -200,7 +202,7 @@ services:
   copywriter_worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: deployment/docker/Dockerfile.worker
     image: agentic/worker:dev
     env_file:
       - .env
@@ -208,7 +210,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -216,7 +218,7 @@ services:
       WORKER_ONCE: ${WORKER_ONCE:-0}
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
       REDIS_DEBUG: ${REDIS_DEBUG:-1}
-    command: ["python", "-m", "agent.operational_agents.copywriter.consumer"]
+    command: ["python", "-m", "tiers.tier_3.copywriter_agent.consumer"]
     restart: unless-stopped
     deploy:
       resources:
@@ -226,6 +228,125 @@ services:
         reservations:
           cpus: '0.25'
           memory: 384M
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Classifier Agent (Tier-3)
+  # -----------------------------------------------------------------------------------------------
+  # Rules-based email classifier for triage; determines route/store/drop action.
+  #################################################################################################
+  classifier_worker:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      CLASSIFIER_LLM_ENABLED: ${CLASSIFIER_LLM_ENABLED:-0}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+    command: ["python", "-m", "tiers.tier_3.classifier_agent.consumer"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Inbound Orchestrator (Tier-2)
+  # -----------------------------------------------------------------------------------------------
+  # Classifies inbound emails and routes to Leads (reply), Persistence (store), or drops.
+  #################################################################################################
+  inbound_orchestrator:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      CLASSIFIER_LLM_ENABLED: ${CLASSIFIER_LLM_ENABLED:-0}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+    command: ["python", "-m", "tiers.tier_2.inbound_orchestrator.consumer"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Leads Orchestrator (Tier-2)
+  # -----------------------------------------------------------------------------------------------
+  # Required for inbound email flows: inbound_orchestrator forwards actionable emails here.
+  #################################################################################################
+  leads_orchestrator:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+      REDIS_DEBUG: ${REDIS_DEBUG:-1}
+    command: ["python", "-m", "tiers.tier_2.leads_orchestrator.consumer"]
+    restart: unless-stopped
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Outreach/Outbound Orchestrator (Tier-2)
+  # -----------------------------------------------------------------------------------------------
+  # Handles outbound orchestration and delegates to Copywriter.
+  #################################################################################################
+  outreach_orchestrator:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
+      REDIS_DEBUG: ${REDIS_DEBUG:-1}
+    command: ["python", "-m", "tiers.tier_2.outreach_orchestrator.consumer"]
+    restart: unless-stopped
     networks:
       - agentic-network
 
@@ -244,18 +365,92 @@ services:
   orchestrator:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: deployment/docker/Dockerfile.worker
     image: agentic/worker:dev
     env_file:
       - .env
     environment:
-      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
       WORKFLOW_STATE_ENABLED: ${WORKFLOW_STATE_ENABLED:-1}
       REDIS_DEBUG: ${REDIS_DEBUG:-1}
-    command: ["python", "-m", "agent.orchestrators.workflow_manager"]
+    command: ["python", "-m", "tiers.tier_1.manager.consumer"]
     restart: unless-stopped
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Inbox Poller (Tier-0 Ingress)
+  # -----------------------------------------------------------------------------------------------
+  # Polls Gmail API or IMAP and publishes typed envelopes to `{tenant}:manager:tasks`.
+  # Profile-gated so the core stack can run without inbox credentials present.
+  #################################################################################################
+  inbox_poller:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      TENANT_ID: ${TENANT_ID:-agentic-dev}
+      INBOX_PROVIDER: ${INBOX_PROVIDER:-gmail}
+      INBOX_POLL_INTERVAL_S: ${INBOX_POLL_INTERVAL_S:-60}
+      GMAIL_INBOX_USER: ${GMAIL_INBOX_USER:-me}
+      # OAuth in containers is typically headless; use a stable local callback.
+      GMAIL_OAUTH_FLOW: ${GMAIL_OAUTH_FLOW:-headless}
+      GMAIL_OAUTH_HOST: ${GMAIL_OAUTH_HOST:-0.0.0.0}
+      GMAIL_OAUTH_PUBLIC_HOST: ${GMAIL_OAUTH_PUBLIC_HOST:-localhost}
+      GMAIL_OAUTH_PORT: ${GMAIL_OAUTH_PORT:-8080}
+      # IMPORTANT: inside the container, always use the mounted paths under /data/gmail.
+      # Do not inherit host absolute paths from .env (those won't exist in the container).
+      GMAIL_READ_CREDENTIALS_PATH: /data/gmail/credentials.json
+      GMAIL_TOKEN_PATH: /data/gmail/gmail_token.json
+      INBOX_DEDUP_TTL_SECONDS: ${INBOX_DEDUP_TTL_SECONDS:-86400}
+      INBOX_PRE_FILTER_ENABLED: ${INBOX_PRE_FILTER_ENABLED:-1}
+      INBOX_PRE_FILTER_SKIP_CATEGORIES: ${INBOX_PRE_FILTER_SKIP_CATEGORIES:-bounce}
+      INBOX_PRE_FILTER_SKIP_CONFIDENCE: ${INBOX_PRE_FILTER_SKIP_CONFIDENCE:-0.8}
+    command: ["python", "-m", "services.email.inbox_poller"]
+    ports:
+      - "${GMAIL_OAUTH_PORT:-8080}:${GMAIL_OAUTH_PORT:-8080}"
+    volumes:
+      # Persist OAuth token across restarts
+      - gmail-oauth:/data/gmail
+      # Mount your Google OAuth client secrets JSON (read-only)
+      # Create this file locally at: ./secrets/gmail_credentials.json
+      - ./secrets/gmail_credentials.json:/data/gmail/credentials.json:ro
+    # OAuth token creation needs to write under /data/gmail; easiest for now is root.
+    user: "0:0"
+    restart: unless-stopped
+    profiles: ["inbox"]
+    networks:
+      - agentic-network
+
+  #################################################################################################
+  # Inbox Webhook Receiver (Tier-0 Ingress, Backup)
+  # -----------------------------------------------------------------------------------------------
+  # FastAPI endpoint that accepts normalized inbound_email_event payloads and publishes to Manager.
+  # This is a backup ingress and/or used for push-based providers.
+  #################################################################################################
+  inbox_webhook:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile.worker
+    image: agentic/worker:dev
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      INBOX_WEBHOOK_SECRET: ${INBOX_WEBHOOK_SECRET}
+      INBOX_WEBHOOK_HOST: 0.0.0.0
+      INBOX_WEBHOOK_PORT: ${INBOX_WEBHOOK_PORT:-8081}
+    command: ["python", "-m", "services.email.webhook_receiver"]
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    profiles: ["inbox"]
     networks:
       - agentic-network
 
@@ -268,12 +463,12 @@ services:
   health_server:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: deployment/docker/Dockerfile.worker
     image: agentic/worker:dev
     env_file:
       - .env
     environment:
-      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic-dev}
     command: ["python", "scripts/health_server.py", "--host", "0.0.0.0", "--port", "8080", "--enable-metrics"]
     ports:
@@ -313,7 +508,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       QUEUE_BACKEND: redis
       INGEST_TO_DB: "true"
     # No depends_on so this tool can run against Redis Cloud when REDIS_URL is set.
@@ -329,6 +524,7 @@ services:
 volumes:
   redis-data:
   postgres-data:
+  gmail-oauth:
 
 networks:
   agentic-network:
@@ -351,7 +547,7 @@ networks:
 #   docker compose logs -f worker
 # Stop & remove containers:
 #   docker compose down
-# Stop & remove volumes (âš ï¸ deletes data):
+# Stop & remove volumes (⚠️ deletes data):
 #   docker compose down -v
 # -------------------------------------------------------------------------------------------------
 # Production Differences
@@ -362,4 +558,3 @@ networks:
 # - Enable TLS for Redis connections
 # - Configure resource limits and health check timeouts
 ###################################################################################################
-

@@ -16,7 +16,7 @@ import uuid
 import logging
 import time
 import hashlib
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 from pathlib import Path
 import os
@@ -28,6 +28,23 @@ from core.envelope import task as create_task_envelope, to_redis_fields
 from core.streams import assert_agents_stream
 from core.envelope import from_redis_message
 from core.schemas.reply_packet import ReplyPacket, LeadResolution, ConversationSummary, Facts, ActionsTaken, NextStep
+
+# Lead qualification scoring
+try:
+    from tiers.tier_2.leads_orchestrator.qualification import QualificationScorer, score_lead_sync
+    QUALIFICATION_ENABLED = True
+except ImportError:
+    QUALIFICATION_ENABLED = False
+    QualificationScorer = None
+    score_lead_sync = None
+
+from tiers.tier_2.leads_orchestrator.qualification.lifecycle import (
+    build_message_qualification_metadata,
+    build_promotion_task_payload,
+    build_staging_qualification_update,
+    normalize_qualification_status,
+)
+from core.security.prompt_hardening import get_hardened_internal_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +67,20 @@ def _trace_log(actor: str, *, correlation_id: str, task_id: str, step: str, deta
         pass
 
 
-def _deterministic_message_id(sender: str, recipient: str, thread_id: str, subject: str, body: str) -> str:
-    """Generate a stable hash-based message id when none is provided."""
-    raw = f"{sender}|{recipient}|{thread_id}|{subject}|{body}".encode("utf-8", errors="ignore")
+def _deterministic_message_id(
+    sender: str,
+    recipient: str,
+    thread_id: str,
+    subject: str,
+    sent_at: str,
+    body: str,
+) -> str:
+    """Generate a stable hash-based message id when none is provided.
+
+    Includes a timestamp component so repeated interactions (separate inbound emails)
+    do not collide when sender/recipient/thread/subject/body are identical.
+    """
+    raw = f"{sender}|{recipient}|{thread_id}|{subject}|{sent_at}|{body}".encode("utf-8", errors="ignore")
     return "hash_" + hashlib.sha256(raw).hexdigest()
 
 
@@ -108,7 +136,7 @@ class LeadsOrchestrator:
 
     def _get_system_prompt(self) -> str:
         """System prompt defining Leads Orchestrator role and decision framework"""
-        return f"""You are the Leads Orchestrator - a Tier 2 autonomous agent in a 3-tier event-driven system.
+        base_prompt = f"""You are the Leads Orchestrator - a Tier 2 autonomous agent in a 3-tier event-driven system.
 
 ## SYSTEM ARCHITECTURE
 - **Tier 1 (Manager):** Assigns you goals via Redis Streams. You report results back.
@@ -165,6 +193,7 @@ You are an AUTONOMOUS EXECUTOR, not an assistant. You:
 - Return JSON-structured results when possible
 
 You receive tasks from Manager (Tier 1). Execute autonomously and return results. Never wait for approval."""
+        return get_hardened_internal_prompt(base_prompt)
 
     def _build_tools(self) -> List:
         """Build all tools (deterministic + delegation)"""
@@ -463,6 +492,54 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
             "operation": "compound",
         }
 
+    def _enqueue_persistence_promote_staging_lead(
+        self,
+        *,
+        staging_lead_id: str,
+        lead_score: int = 50,
+        campaign_id: Optional[str] = None,
+        qualification_status: str = "qualified",
+    ) -> Dict[str, Any]:
+        """Enqueue promotion of a staging lead to the leads table (copy conversations/messages)."""
+        task_id = f"promote_staging_{uuid.uuid4()}"
+        payload = {
+            "operation": "promote_staging_lead",
+            "staging_lead_id": staging_lead_id,
+            "lead_score": int(lead_score) if isinstance(lead_score, int) or str(lead_score).isdigit() else 50,
+            "campaign_id": campaign_id,
+            "qualification_status": qualification_status,
+            "delegated_by": "leads_orchestrator",
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        stream_name = f"{self.tenant_id}:agents:persistence:tasks"
+        assert_agents_stream(stream_name)
+
+        envelope = create_task_envelope(
+            source="leads_orchestrator",
+            task_id=task_id,
+            payload=payload,
+            destination="persistence_agent",
+            tenant_id=self.tenant_id,
+        )
+
+        try:
+            self.redis.xadd(stream_name, to_redis_fields(envelope))
+            logger.info(
+                "Delegated staging promotion to PersistenceAgent stream=%s task_id=%s",
+                stream_name,
+                task_id,
+            )
+        except Exception as e:
+            logger.error(f"Failed to enqueue staging promotion: {e}")
+
+        return {
+            "status": "enqueued_for_persistence",
+            "tenant_id": self.tenant_id,
+            "persistence_task_id": task_id,
+            "operation": "promote_staging_lead",
+        }
+
     def _build_inbound_email_steps(
         self,
         *,
@@ -470,13 +547,19 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
         lead_data: Dict[str, Any],
         cleanup_staging: bool,
         lead_resolution: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        email_classification: Optional[Dict[str, Any]] = None,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
         """Construct FK-safe steps for storing inbound email.
 
         Routing rules:
         - If an existing lead is found (exact email or domain match), attach the conversation/message to `leads`.
         - If an existing staging lead is found, write to staging tables.
         - Otherwise, create a staging_lead and attach the inbound conversation/message there.
+        
+        Qualification (when enabled):
+        - Fast-track: High-score new leads skip staging and write directly to leads table
+        - Auto-promote: Qualifying staging leads get a promotion step appended
         """
 
         sender_email = (email_event or {}).get("from") or ""
@@ -489,7 +572,14 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
         sent_at = (email_event or {}).get("received_at") or (email_event or {}).get("sent_at") or datetime.utcnow().isoformat()
 
         if not message_id:
-            message_id = _deterministic_message_id(sender_email, recipient_email, thread_id or "", subject or "", body or "")
+            message_id = _deterministic_message_id(
+                sender_email,
+                recipient_email,
+                thread_id or "",
+                subject or "",
+                str(sent_at or ""),
+                body or "",
+            )
         archived_at = datetime.utcnow().isoformat()
 
         lr = lead_resolution or {}
@@ -502,7 +592,161 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
         elif resolved_source == "staging_leads" and resolved_lead_id:
             target = "staging_existing"
 
+        # =====================================================================
+        # QUALIFICATION SCORING - Fast-track & Auto-promote Logic
+        # =====================================================================
+        qualification_result = None
+        qualification_enabled = QUALIFICATION_ENABLED and os.getenv("LEADS_QUALIFICATION_ENABLED", "1").lower() in ("1", "true", "yes")
+        
+        if qualification_enabled and score_lead_sync is not None:
+            try:
+                # Build lead profile from available data
+                lead_profile = {
+                    "email": sender_email,
+                    **lead_data,
+                }
+                
+                # Add conversation context if available
+                conv_history = conversation_history or []
+                if body and not conv_history:
+                    # Use current email as conversation history
+                    conv_history = [{"content": body, "direction": "inbound", "sender": sender_email}]
+                
+                # Determine lead source for scoring
+                score_lead_source = "new" if target == "staging_new" else (
+                    "leads" if target == "lead_existing" else "staging_leads"
+                )
+                
+                qualification_result = score_lead_sync(
+                    lead_data=lead_profile,
+                    conversation_history=conv_history,
+                    email_classification=email_classification or {},
+                    lead_source=score_lead_source,
+                    email_direction="inbound",
+                )
+                
+                logger.info(
+                    "[QUALIFICATION] email=%s score=%d decision=%s fast_track=%s signals=%s",
+                    sender_email,
+                    qualification_result.score,
+                    qualification_result.decision,
+                    qualification_result.fast_track,
+                    qualification_result.signals[:5],  # Log first 5 signals
+                )
+                
+                # FAST-TRACK: High-score new lead → write directly to leads table
+                if target == "staging_new" and qualification_result.fast_track:
+                    target = "lead_fast_track"
+                    logger.info(
+                        "[QUALIFICATION] Fast-tracking new lead to leads table: email=%s score=%d",
+                        sender_email,
+                        qualification_result.score,
+                    )
+                    
+            except Exception as e:
+                logger.warning(f"[QUALIFICATION] Scoring failed, falling back to default routing: {e}")
+                qualification_result = None
+
         steps: List[Dict[str, Any]] = []
+        promotion_candidate: Optional[Dict[str, Any]] = None
+
+        # =====================================================================
+        # FAST-TRACK PATH: New lead with high score → write directly to leads
+        # =====================================================================
+        if target == "lead_fast_track":
+            # Generate new lead ID for fast-tracked lead
+            fast_track_lead_id = _deterministic_uuid5(
+                self.tenant_id,
+                "lead",
+                sender_email,
+            )
+            conversation_pk = _deterministic_uuid5(
+                self.tenant_id,
+                "conversation",
+                fast_track_lead_id,
+                str(thread_id or subject or ""),
+            )
+            message_pk = _deterministic_uuid5(
+                self.tenant_id,
+                "message",
+                conversation_pk,
+                str(message_id or ""),
+            )
+            
+            message_metadata: Dict[str, Any] = {}
+            if isinstance(metadata, dict):
+                message_metadata.update(metadata)
+            if message_id:
+                message_metadata.setdefault("message_id", message_id)
+            if thread_id:
+                message_metadata.setdefault("thread_id", thread_id)
+            if subject:
+                message_metadata.setdefault("subject", subject)
+            if sender_email:
+                message_metadata.setdefault("from", sender_email)
+            if recipient_email:
+                message_metadata.setdefault("to", recipient_email)
+            
+            # Add qualification metadata
+            if qualification_result:
+                message_metadata["qualification"] = build_message_qualification_metadata(
+                    decision=getattr(qualification_result, "decision", None),
+                    score=getattr(qualification_result, "score", None),
+                    signals=getattr(qualification_result, "signals", None),
+                    fast_track=True,
+                )
+            
+            steps.extend([
+                {
+                    "step_name": "lead",
+                    "table": "leads",
+                    "operation": "upsert",
+                    "data": {
+                        "id": fast_track_lead_id,
+                        "email": sender_email,
+                        "source": "inbound_email",
+                        "lead_score": qualification_result.score if qualification_result else 85,
+                        "qualification_status": normalize_qualification_status(
+                            getattr(qualification_result, "decision", None)
+                        ),
+                        "current_status": "active",
+                        **lead_data,
+                    },
+                    "match_on": ["id"],
+                },
+                {
+                    "step_name": "conversation",
+                    "table": "conversations",
+                    "operation": "upsert",
+                    "data": {
+                        "id": conversation_pk,
+                        "lead_id": "$ref:lead.id",
+                        "thread_id": thread_id,
+                        "subject": subject,
+                        "channel": "email",
+                        "status": "active",
+                        "summary": subject or "",
+                    },
+                    "match_on": ["id"],
+                },
+                {
+                    "step_name": "message",
+                    "table": "messages",
+                    "operation": "upsert",
+                    "data": {
+                        "id": message_pk,
+                        "conversation_id": "$ref:conversation.id",
+                        "sender_type": "lead",
+                        "text_content": body,
+                        "sent_at": sent_at,
+                        "message_id": message_id,
+                        "metadata": message_metadata,
+                    },
+                    "match_on": ["id"],
+                },
+            ])
+            
+            return steps
 
         if target == "lead_existing":
             conversation_pk = _deterministic_uuid5(
@@ -547,6 +791,7 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                         "table": "conversations",
                         "operation": "upsert",
                         "data": {
+                            "id": conversation_pk,
                             "lead_id": "$ref:lead.id",
                             "thread_id": thread_id,
                             "subject": subject,
@@ -554,13 +799,15 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                             "status": "active",
                             "summary": subject or "",
                         },
-                        "match_on": ["lead_id", "thread_id"] if thread_id else ["lead_id", "subject"],
+                        # Use PK upsert to avoid relying on partial unique indexes.
+                        "match_on": ["id"],
                     },
                     {
                         "step_name": "message",
                         "table": "messages",
                         "operation": "upsert",
                         "data": {
+                            "id": message_pk,
                             "conversation_id": "$ref:conversation.id",
                             "sender_type": "lead",
                             "text_content": body,
@@ -568,7 +815,8 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                             "message_id": message_id,
                             "metadata": message_metadata or {},
                         },
-                        "match_on": ["conversation_id", "message_id"],
+                        # Use PK upsert to avoid relying on partial unique indexes.
+                        "match_on": ["id"],
                     },
                     {
                         "step_name": "update_stage",
@@ -594,6 +842,19 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                 )
 
         elif target == "staging_existing":
+            # Existing staging lead found - update it and add conversation/message
+            staging_conversation_pk = _deterministic_uuid5(
+                self.tenant_id,
+                "staging_conversation",
+                str(sender_email or ""),
+                str(thread_id or subject or ""),
+            )
+            staging_message_pk = _deterministic_uuid5(
+                self.tenant_id,
+                "staging_message",
+                staging_conversation_pk,
+                str(message_id or ""),
+            )
             steps.extend(
                 [
                     {
@@ -608,6 +869,7 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                         "table": "staging_conversations",
                         "operation": "upsert",
                         "data": {
+                            "id": staging_conversation_pk,
                             "staging_lead_id": "$ref:staging_lead.id",
                             "thread_id": thread_id,
                             "subject": subject,
@@ -615,41 +877,69 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                             "status": "open",
                             "metadata": {},
                         },
-                        "match_on": ["staging_lead_id", "thread_id"] if thread_id else ["staging_lead_id", "subject"],
+                        # Use PK upsert to avoid relying on partial unique indexes.
+                        "match_on": ["id"],
                     },
                     {
                         "step_name": "staging_message",
                         "table": "staging_messages",
                         "operation": "upsert",
                         "data": {
+                            "id": staging_message_pk,
                             "staging_conversation_id": "$ref:staging_conversation.id",
                             "sender": sender_email,
                             "receiver": recipient_email,
                             "content": body,
                             "sent_at": sent_at,
                             "message_id": message_id,
+                            "direction": "inbound",  # From lead to us
                             "metadata": metadata or {},
                         },
-                        "match_on": ["staging_conversation_id", "message_id"],
+                        # Use PK upsert to avoid relying on partial unique indexes.
+                        "match_on": ["id"],
                     },
                 ]
             )
 
         else:  # staging_new
+            staging_lead_id = _deterministic_uuid5(
+                self.tenant_id,
+                "staging_lead",
+                str(sender_email or ""),
+            )
+            staging_conversation_pk = _deterministic_uuid5(
+                self.tenant_id,
+                "staging_conversation",
+                str(sender_email or ""),
+                str(thread_id or subject or ""),
+            )
+            staging_message_pk = _deterministic_uuid5(
+                self.tenant_id,
+                "staging_message",
+                staging_conversation_pk,
+                str(message_id or ""),
+            )
+            # DEDUPLICATION RULES:
+            # - staging_leads: match on (client_id, email) - client_id auto-injected by persistence agent
+            # - staging_conversations: match on (staging_lead_id, thread_id) OR (staging_lead_id, subject)
+            # - staging_messages: match on (staging_conversation_id, message_id)
             steps.extend(
                 [
                     {
                         "step_name": "staging_lead",
                         "table": "staging_leads",
                         "operation": "upsert",
-                        "data": {"email": sender_email, "source": "inbound_email", **lead_data},
-                        "match_on": ["email"],
+                        "data": {"id": staging_lead_id, "email": sender_email, "source": "inbound_email", **lead_data},
+                        # Uses unique index: ux_staging_leads_client_email (client_id, email)
+                        # client_id is auto-injected by persistence agent's _inject_scoping_fields
+                        "match_on": ["client_id", "email"],
                     },
                     {
                         "step_name": "staging_conversation",
                         "table": "staging_conversations",
                         "operation": "upsert",
                         "data": {
+                            "id": staging_conversation_pk,
                             "staging_lead_id": "$ref:staging_lead.id",
                             "thread_id": thread_id,
                             "subject": subject,
@@ -657,27 +947,82 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                             "status": "open",
                             "metadata": {},
                         },
-                        "match_on": ["staging_lead_id", "thread_id"] if thread_id else ["staging_lead_id", "subject"],
+                        # Use PK upsert to avoid relying on partial unique indexes.
+                        "match_on": ["id"],
                     },
                     {
                         "step_name": "staging_message",
                         "table": "staging_messages",
                         "operation": "upsert",
                         "data": {
+                            "id": staging_message_pk,
                             "staging_conversation_id": "$ref:staging_conversation.id",
                             "sender": sender_email,
                             "receiver": recipient_email,
                             "content": body,
                             "sent_at": sent_at,
                             "message_id": message_id,
+                            "direction": "inbound",  # From lead to us
                             "metadata": metadata or {},
                         },
-                        "match_on": ["staging_conversation_id", "message_id"],
+                        # Use PK upsert to avoid relying on partial unique indexes.
+                        "match_on": ["id"],
                     },
                 ]
             )
 
-        return steps
+        # =====================================================================
+        # AUTO-PROMOTION: If staging lead qualifies, mark for promotion
+        # =====================================================================
+        if qualification_result and qualification_result.promote and target in ("staging_existing", "staging_new"):
+            # Add step to update staging lead with qualification score and mark promotion_ready
+            staging_lead_ref = "$ref:staging_lead.id"
+            steps.append(
+                {
+                    "step_name": "update_qualification",
+                    "table": "staging_leads",
+                    "operation": "update",
+                    "where": {"id": staging_lead_ref},
+                    "data": build_staging_qualification_update(
+                        decision=getattr(qualification_result, "decision", None),
+                        promote=True,
+                        score=getattr(qualification_result, "score", None),
+                    ),
+                    "on_error": "warn",
+                }
+            )
+            logger.info(
+                "[QUALIFICATION] Marked staging lead for promotion: email=%s score=%d",
+                sender_email,
+                qualification_result.score,
+            )
+
+            staging_lead_id = resolved_lead_id
+            if target == "staging_new":
+                staging_lead_id = _deterministic_uuid5(
+                    self.tenant_id,
+                    "staging_lead",
+                    str(sender_email or ""),
+                )
+
+            campaign_id = None
+            if isinstance(lead_data, dict):
+                campaign_id = lead_data.get("campaign_id")
+            if not campaign_id and isinstance(lr, dict):
+                lr_data = lr.get("lead_data") if isinstance(lr.get("lead_data"), dict) else {}
+                campaign_id = lr_data.get("campaign_id")
+
+            if staging_lead_id:
+                promotion_candidate = {
+                    "staging_lead_id": staging_lead_id,
+                    "lead_score": qualification_result.score,
+                    "campaign_id": campaign_id,
+                    "qualification_status": normalize_qualification_status(
+                        getattr(qualification_result, "decision", None)
+                    ),
+                }
+
+        return steps, promotion_candidate
 
     def _enqueue_persistence_query_table(
         self,
@@ -733,21 +1078,49 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
         }
 
     def _wait_for_agent_result(self, *, result_stream: str, task_id: str, timeout_s: int = 30) -> Optional[Dict[str, Any]]:
-        """Best-effort polling helper for E2E-style synchronous orchestration."""
-        deadline = time.time() + max(1, int(timeout_s))
+        """Best-effort synchronous wait for a specific task result.
+
+        Implementation notes
+        - Uses XREAD (blocking) starting from the current stream tail so we can't miss
+          results due to high stream volume (which can happen with naive XREVRANGE(count=50)).
+        - Falls back to best-effort behavior on Redis errors.
+        """
+
+        timeout_s = max(1, int(timeout_s))
+        deadline = time.time() + timeout_s
+
+        # Start reading from the stream tail so we only see new results.
+        last_id = "$"
+        try:
+            info = self.redis.xinfo_stream(result_stream)
+            if isinstance(info, dict) and info.get("last-generated-id"):
+                last_id = info.get("last-generated-id")
+        except Exception:
+            # If we can't inspect the stream, still attempt a blocking read from "$".
+            last_id = "$"
+
         while time.time() < deadline:
             try:
-                entries = self.redis.xrevrange(result_stream, max="+", min="-", count=50)
-                for _msg_id, fields in entries:
-                    try:
-                        env = from_redis_message(fields)
-                    except Exception:
-                        continue
-                    if env.metadata.task_id == task_id:
-                        return env.payload
+                remaining_ms = int(max(0, (deadline - time.time())) * 1000)
+                block_ms = min(500, remaining_ms) if remaining_ms else 0
+
+                # XREAD returns [(stream, [(id, fields), ...])]
+                resp = self.redis.xread({result_stream: last_id}, count=100, block=block_ms)
+                if not resp:
+                    continue
+
+                for _stream, messages in resp:
+                    for msg_id, fields in messages:
+                        last_id = msg_id
+                        try:
+                            env = from_redis_message(fields)
+                        except Exception:
+                            continue
+                        if env.metadata.task_id == task_id:
+                            return env.payload
             except Exception:
-                pass
-            time.sleep(0.5)
+                # Avoid tight loop; keep best-effort semantics.
+                time.sleep(0.5)
         return None
     
     def _create_update_lead_tool(self):
@@ -1192,7 +1565,7 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
             """
 
             lead_data = lead_data or {}
-            steps = self._build_inbound_email_steps(
+            steps, promotion_candidate = self._build_inbound_email_steps(
                 email_event=email_event,
                 lead_data=lead_data,
                 cleanup_staging=cleanup_staging,
@@ -1205,6 +1578,14 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                     "continue_on_skip": True,
                 }
             )
+
+            if promotion_candidate:
+                enqueue["promotion"] = self._enqueue_persistence_promote_staging_lead(
+                    staging_lead_id=promotion_candidate.get("staging_lead_id"),
+                    lead_score=promotion_candidate.get("lead_score", 50),
+                    campaign_id=promotion_candidate.get("campaign_id"),
+                    qualification_status=promotion_candidate.get("qualification_status", "qualified"),
+                )
 
             if wait_for_result is None:
                 wait_for_result = os.getenv("LEADS_WAIT_FOR_PERSISTENCE_RESULTS", "0").lower() in ("1", "true", "yes")
@@ -1411,6 +1792,104 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
             except Exception as e:
                 logger.warning(f"Deep reply flow failed, falling back to normal agent invoke: {e}")
 
+        # Fast-path qualify_lead intent: evaluate staging lead for promotion
+        intent = None
+        if isinstance(task_data_or_goal, dict):
+            intent = task_data_or_goal.get("intent") or (
+                task_data_or_goal.get("payload", {}).get("intent") if isinstance(task_data_or_goal.get("payload"), dict) else None
+            )
+        if intent == "qualify_lead" or (goal and "qualify" in goal.lower() and "staging" in goal.lower()):
+            staging_lead_id = None
+            campaign_id = None
+            if isinstance(context, dict):
+                staging_lead_id = context.get("staging_lead_id") or context.get("lead_id")
+                campaign_id = context.get("campaign_id")
+            if isinstance(task_data_or_goal, dict):
+                staging_lead_id = staging_lead_id or task_data_or_goal.get("staging_lead_id")
+                campaign_id = campaign_id or task_data_or_goal.get("campaign_id")
+            
+            if staging_lead_id:
+                return self._handle_qualify_lead(
+                    staging_lead_id=staging_lead_id,
+                    execution_id=execution_id,
+                    start_time=start_time,
+                    campaign_id=campaign_id,
+                )
+
+        # Deterministic inbound email persistence: do NOT treat inbound email events as
+        # conversation-context retrieval requests just because the payload contains
+        # words like "thread"/"conversation".
+        if intent == "inbound" and isinstance(email_event, dict):
+            try:
+                lead_data = {}
+                cleanup_staging = bool(os.getenv("LEADS_CLEANUP_STAGING_ON_INBOUND", "0").lower() in ("1", "true", "yes"))
+                lead_resolution_payload = None
+                email_classification = None
+                conversation_history = None
+
+                if isinstance(context, dict):
+                    if isinstance(context.get("lead_data"), dict):
+                        lead_data = context.get("lead_data") or {}
+                    cleanup_staging = bool(context.get("cleanup_staging", cleanup_staging))
+                    if isinstance(context.get("lead_resolution"), dict):
+                        lead_resolution_payload = context.get("lead_resolution")
+                    elif isinstance(context.get("lead_resolution_payload"), dict):
+                        lead_resolution_payload = context.get("lead_resolution_payload")
+                    if isinstance(context.get("classification"), dict):
+                        email_classification = context.get("classification")
+                    if isinstance(context.get("conversation_history"), list):
+                        conversation_history = context.get("conversation_history")
+
+                steps, promotion_candidate = self._build_inbound_email_steps(
+                    email_event=email_event,
+                    lead_data=lead_data,
+                    cleanup_staging=cleanup_staging,
+                    lead_resolution=lead_resolution_payload,
+                    email_classification=email_classification,
+                    conversation_history=conversation_history,
+                )
+                store_status = self._enqueue_persistence_compound(
+                    {
+                        "steps": steps,
+                        "rollback_on_failure": True,
+                        "continue_on_skip": True,
+                        "metadata": {"source": "leads_orchestrator", "path": "inbound_deterministic"},
+                    }
+                )
+
+                promotion_status = None
+                if promotion_candidate:
+                    promotion_status = self._enqueue_persistence_promote_staging_lead(
+                        staging_lead_id=promotion_candidate.get("staging_lead_id"),
+                        lead_score=promotion_candidate.get("lead_score", 50),
+                        campaign_id=promotion_candidate.get("campaign_id"),
+                        qualification_status=promotion_candidate.get("qualification_status", "qualified"),
+                    )
+
+                elapsed = (datetime.now() - start_time).total_seconds() * 1000
+                return {
+                    "success": True,
+                    "execution_id": execution_id,
+                    "orchestrator": "leads",
+                    "path": "inbound_persist",
+                    "store_inbound": store_status,
+                    "promotion": promotion_status,
+                    "latency_ms": elapsed,
+                    "timestamp": start_time.isoformat(),
+                }
+            except Exception as e:
+                logger.error(f"Inbound deterministic persistence failed: {e}", exc_info=True)
+                elapsed = (datetime.now() - start_time).total_seconds() * 1000
+                return {
+                    "success": False,
+                    "execution_id": execution_id,
+                    "orchestrator": "leads",
+                    "path": "inbound_persist",
+                    "error": str(e),
+                    "latency_ms": elapsed,
+                    "timestamp": start_time.isoformat(),
+                }
+
         # Deterministic conversation-context retrieval (do not defer to the LLM).
         if self._is_conversation_context_goal(goal, context):
             return self._handle_conversation_context_request(
@@ -1525,6 +2004,162 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                 "timestamp": start_time.isoformat()
             }
 
+    def _handle_qualify_lead(
+        self,
+        *,
+        staging_lead_id: str,
+        execution_id: str,
+        start_time: datetime,
+        campaign_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Handle qualify_lead intent: evaluate staging lead and promote if qualified.
+        
+        Args:
+            staging_lead_id: UUID of the staging lead to evaluate
+            execution_id: Execution tracking ID
+            start_time: Start time for latency calculation
+            campaign_id: Optional campaign to link on promotion
+            
+        Returns:
+            Result dict with qualification decision and promotion status
+        """
+        try:
+            # 1. Fetch staging lead and conversation history via RAG
+            rag_task = self._enqueue_rag_context_task(
+                email=None,
+                lead_id=staging_lead_id,
+                context_depth="deep",
+            )
+            
+            rag_timeout = int(os.getenv("LEADS_RAG_CONTEXT_TIMEOUT_S", "30"))
+            rag_payload = self._wait_for_agent_result(
+                result_stream=f"{self.tenant_id}:agents:rag:results",
+                task_id=rag_task.get("task_id", ""),
+                timeout_s=rag_timeout,
+            )
+            
+            if not rag_payload or rag_payload.get("status") != "success":
+                elapsed = (datetime.now() - start_time).total_seconds() * 1000
+                return {
+                    "success": False,
+                    "execution_id": execution_id,
+                    "orchestrator": "leads",
+                    "path": "qualify_lead",
+                    "error": "Failed to retrieve staging lead context",
+                    "rag_status": rag_payload.get("status") if rag_payload else "timeout",
+                    "latency_ms": elapsed,
+                }
+            
+            # 2. Extract lead data and conversation history
+            lead_record = rag_payload.get("lead") or {}
+            conversations = rag_payload.get("conversations") or []
+            messages = rag_payload.get("messages") or []
+            
+            # Build conversation history for scoring
+            conversation_history = [
+                {
+                    "content": msg.get("text_content") or msg.get("content") or "",
+                    "direction": msg.get("direction") or "unknown",
+                    "sender": msg.get("sender") or msg.get("sender_type") or "",
+                }
+                for msg in messages
+            ]
+            
+            # 3. Run qualification scoring
+            if not QUALIFICATION_ENABLED or score_lead_sync is None:
+                elapsed = (datetime.now() - start_time).total_seconds() * 1000
+                return {
+                    "success": False,
+                    "execution_id": execution_id,
+                    "orchestrator": "leads",
+                    "path": "qualify_lead",
+                    "error": "Qualification scoring not available",
+                    "latency_ms": elapsed,
+                }
+            
+            qualification_result = score_lead_sync(
+                lead_data=lead_record,
+                conversation_history=conversation_history,
+                email_classification={},  # No email classification for manual qualify
+                lead_source="staging_leads",
+                email_direction="inbound",
+            )
+            
+            logger.info(
+                "[QUALIFY_LEAD] staging_lead_id=%s score=%d decision=%s promote=%s",
+                staging_lead_id,
+                qualification_result.score,
+                qualification_result.decision,
+                qualification_result.promote,
+            )
+            
+            # 4. If qualified, trigger promotion via persistence agent
+            promotion_result = None
+            if qualification_result.promote:
+                task_id = f"persist_promote_{uuid.uuid4()}"
+                payload = build_promotion_task_payload(
+                    staging_lead_id=staging_lead_id,
+                    decision=getattr(qualification_result, "decision", None),
+                    score=qualification_result.score,
+                    campaign_id=campaign_id,
+                    delegated_by="leads_orchestrator",
+                    timestamp=datetime.utcnow().isoformat(),
+                )
+                
+                stream_name = f"{self.tenant_id}:agents:persistence:tasks"
+                assert_agents_stream(stream_name)
+                
+                envelope = create_task_envelope(
+                    source="leads_orchestrator",
+                    task_id=task_id,
+                    payload=payload,
+                    destination="persistence_agent",
+                    tenant_id=self.tenant_id,
+                )
+                
+                self.redis.xadd(stream_name, to_redis_fields(envelope))
+                logger.info(f"[QUALIFY_LEAD] Enqueued promotion task_id={task_id}")
+                
+                # Wait for promotion result
+                promotion_result = self._wait_for_agent_result(
+                    result_stream=f"{self.tenant_id}:agents:persistence:results",
+                    task_id=task_id,
+                    timeout_s=30,
+                )
+            
+            elapsed = (datetime.now() - start_time).total_seconds() * 1000
+            return {
+                "success": True,
+                "execution_id": execution_id,
+                "orchestrator": "leads",
+                "path": "qualify_lead",
+                "staging_lead_id": staging_lead_id,
+                "qualification": {
+                    "score": qualification_result.score,
+                    "decision": qualification_result.decision,
+                    "promote": qualification_result.promote,
+                    "fast_track": qualification_result.fast_track,
+                    "signals": qualification_result.signals,
+                    "reasoning": qualification_result.reasoning,
+                },
+                "promoted": qualification_result.promote,
+                "promotion_result": promotion_result,
+                "latency_ms": elapsed,
+                "timestamp": start_time.isoformat(),
+            }
+            
+        except Exception as e:
+            logger.error(f"[QUALIFY_LEAD] Failed: {e}")
+            elapsed = (datetime.now() - start_time).total_seconds() * 1000
+            return {
+                "success": False,
+                "execution_id": execution_id,
+                "orchestrator": "leads",
+                "path": "qualify_lead",
+                "error": str(e),
+                "latency_ms": elapsed,
+            }
+
     def _handle_deep_reply_flow(
         self,
         *,
@@ -1541,15 +2176,46 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
         stored_ok = False
         write_markers: List[str] = []
 
-        rag_task = self._enqueue_rag_context_task(email=email, lead_id=lead_id)
+        rag_task = self._enqueue_rag_context_task(
+            email=email,
+            lead_id=lead_id,
+            subject=email_event.get("subject") if isinstance(email_event, dict) else None,
+            thread_id=(email_event.get("thread_id") if isinstance(email_event, dict) else None),
+            context_depth=(context.get("context_depth") if isinstance(context, dict) else "deep"),
+        )
         wait_for_rag = os.getenv("LEADS_WAIT_FOR_RAG_CONTEXT", "1").lower() in ("1", "true", "yes")
+        rag_timeout = int(os.getenv("LEADS_RAG_CONTEXT_TIMEOUT_S", "20"))
         rag_payload = None
         if wait_for_rag:
+            logger.info(
+                "[RAG_WAIT] Waiting for RAG result: task_id=%s timeout=%ss email=%s",
+                rag_task.get("task_id", ""),
+                rag_timeout,
+                email,
+            )
             rag_payload = self._wait_for_agent_result(
                 result_stream=f"{self.tenant_id}:agents:rag:results",
                 task_id=rag_task.get("task_id", ""),
-                timeout_s=int(os.getenv("LEADS_RAG_CONTEXT_TIMEOUT_S", "20")),
+                timeout_s=rag_timeout,
             )
+            if rag_payload is None:
+                logger.error(
+                    "[RAG_TIMEOUT] RAG Agent did not respond within %ss! "
+                    "task_id=%s email=%s. Check if RAG consumer is running. "
+                    "Run: python -m tiers.tier_3.rag_agent.consumer",
+                    rag_timeout,
+                    rag_task.get("task_id", ""),
+                    email,
+                )
+            else:
+                logger.info(
+                    "[RAG_SUCCESS] RAG returned: status=%s lead_source=%s lead_id=%s conversations=%d messages=%d",
+                    rag_payload.get("status"),
+                    rag_payload.get("lead_source"),
+                    (rag_payload.get("lead") or {}).get("id") if isinstance(rag_payload.get("lead"), dict) else None,
+                    len(rag_payload.get("conversations") or []),
+                    len(rag_payload.get("messages") or []),
+                )
 
         lead_resolution_payload: Dict[str, Any] = {}
         if isinstance(rag_payload, dict):
@@ -1576,7 +2242,7 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                 if isinstance(context, dict) and isinstance(context.get("lead_data"), dict):
                     lead_data = context.get("lead_data") or {}
 
-                steps = self._build_inbound_email_steps(
+                steps, promotion_candidate = self._build_inbound_email_steps(
                     email_event=email_event,
                     lead_data=lead_data,
                     cleanup_staging=bool(os.getenv("LEADS_CLEANUP_STAGING_ON_INBOUND", "0").lower() in ("1", "true", "yes")),
@@ -1590,6 +2256,14 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                         "metadata": {"source": "leads_orchestrator", "path": "deep_reply_flow"},
                     }
                 )
+                promotion_status = None
+                if promotion_candidate:
+                    promotion_status = self._enqueue_persistence_promote_staging_lead(
+                        staging_lead_id=promotion_candidate.get("staging_lead_id"),
+                        lead_score=promotion_candidate.get("lead_score", 50),
+                        campaign_id=promotion_candidate.get("campaign_id"),
+                        qualification_status=promotion_candidate.get("qualification_status", "qualified"),
+                    )
                 logger.info(
                     "[INBOUND_PERSIST] enqueued compound steps=%s task_id=%s lead_resolution=%s",
                     len(steps),
@@ -1599,6 +2273,8 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
                 stored_ok = True
                 if isinstance(store_status, dict) and store_status.get("persistence_task_id"):
                     write_markers.append(f"persistence_task_id:{store_status.get('persistence_task_id')}")
+                if promotion_status and isinstance(promotion_status, dict) and promotion_status.get("persistence_task_id"):
+                    write_markers.append(f"persistence_task_id:{promotion_status.get('persistence_task_id')}")
             except Exception as e:
                 logger.warning(f"Failed to store inbound email event; continuing deep reply flow: {e}")
         else:
@@ -1630,20 +2306,50 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
             "timestamp": start_time.isoformat(),
         }
 
-    def _enqueue_rag_context_task(self, *, email: Optional[str], lead_id: Optional[str]) -> Dict[str, Any]:
+    def _enqueue_rag_context_task(
+        self,
+        *,
+        email: Optional[str],
+        lead_id: Optional[str],
+        subject: Optional[str] = None,
+        thread_id: Optional[str] = None,
+        context_depth: str = "deep",
+    ) -> Dict[str, Any]:
         task_id = f"rag_ctx_{uuid.uuid4()}"
-        # Debug hint: what the RAG layer is expected to query.
+        # For inbound reply flows we need lead profile + selected thread + message history.
+        # Use build_reply_context (thread_id > subject > recency) instead of get_lead_context.
         # This is intentionally small and stable for low-token debugging.
         query_plan = {
-            "tables": ["leads", "conversations", "messages"],
-            "match_keys": ["lead_id", "email"],
-            "operation": "get_lead_context",
+            "tables": [
+                "leads",
+                "staging_leads",
+                "conversations",
+                "staging_conversations",
+                "messages",
+                "staging_messages",
+            ],
+            "match_keys": ["lead_id", "email", "thread_id", "subject"],
+            "operation": "build_reply_context",
+            "context_depth": context_depth,
         }
+
+        max_messages = 200 if str(context_depth).lower() == "deep" else 50
+
+        # RAGAgent.execute expects a goal/record-style payload for deterministic lookup.
         payload = {
-            "operation": "get_lead_context",
+            "goal": "build_reply_context",
+            "entity_type": "lead",
+            "record": {"email": email, "lead_id": lead_id},
+            "operation": "build_reply_context",
             "email": email,
             "lead_id": lead_id,
+            "thread_id": thread_id,
+            "subject": subject,
+            "max_messages": max_messages,
+            "include_lead_profile": True,
+            "include_all_threads": True,
             "query_plan": query_plan,
+            "task_id": task_id,
             "delegated_by": "leads_orchestrator",
             "timestamp": datetime.utcnow().isoformat(),
         }
@@ -1835,12 +2541,18 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
 
         if isinstance(rag_payload, dict):
             lead_record = rag_payload.get("lead")
-            conversations = rag_payload.get("conversations") or []
+            # Handle both plural "conversations" (list) and singular "conversation" (dict)
+            if isinstance(rag_payload.get("conversations"), list):
+                conversations = rag_payload.get("conversations") or []
+            elif isinstance(rag_payload.get("conversation"), dict):
+                conversations = [rag_payload.get("conversation")]
+            else:
+                conversations = []
             messages = rag_payload.get("messages") or []
             status = rag_payload.get("status", "unknown")
             lead_source = rag_payload.get("lead_source")
             query_trace = rag_payload.get("query_trace")
-            match_reason = rag_payload.get("match_reason")
+            match_reason = rag_payload.get("match_reason") or rag_payload.get("selection_reason")
 
         lead_resolution = LeadResolution(
             status="found" if lead_record else status,
@@ -1848,6 +2560,7 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
             confidence=0.82 if lead_record else 0.25,
             source=lead_source if lead_source else ("rag" if lead_record else "rag_not_found"),
             alternatives=([{ "match_reason": match_reason }] if match_reason else []),
+            lead_data=lead_record if isinstance(lead_record, dict) else None,
         )
 
         if lead_resolution_payload:
@@ -1881,8 +2594,13 @@ You receive tasks from Manager (Tier 1). Execute autonomously and return results
             )
 
         facts = Facts(
-            company=lead_record.get("company") if isinstance(lead_record, dict) else None,
-            role=lead_record.get("title") if isinstance(lead_record, dict) else None,
+            first_name=lead_record.get("first_name") if isinstance(lead_record, dict) else None,
+            last_name=lead_record.get("last_name") if isinstance(lead_record, dict) else None,
+            # DB column is 'company_name'; also check 'company' for backward compat
+            company=(lead_record.get("company_name") or lead_record.get("company")) if isinstance(lead_record, dict) else None,
+            # DB column is 'job_title'; also check 'title'/'role' for backward compat
+            role=(lead_record.get("job_title") or lead_record.get("title") or lead_record.get("role")) if isinstance(lead_record, dict) else None,
+            email=lead_record.get("email") if isinstance(lead_record, dict) else email_event.get("from"),
             intent=email_event.get("intent") or email_event.get("subject"),
             extras={
                 "email_event_subject": email_event.get("subject"),

@@ -10,6 +10,7 @@ scripts/
 ├── demos/           # Example/demo scripts
 ├── deployment/      # Deployment utilities
 ├── diagnostics/     # System diagnostics
+├── maintenance/     # Maintenance backstops
 ├── monitoring/      # Monitoring tools
 ├── redis/           # Redis operations
 ├── sql/             # SQL scripts
@@ -179,6 +180,28 @@ Total: 5.2s
 
 ---
 
+## Maintenance Scripts
+
+### `scripts/maintenance/sweep_stale_staging_leads.py`
+
+Find staging leads that have been stuck unarchived in conservative pending states past a threshold, and optionally archive them.
+
+Dry-run (default):
+
+```powershell
+python -m scripts.maintenance.sweep_stale_staging_leads --days 14
+```
+
+Apply updates:
+
+```powershell
+python -m scripts.maintenance.sweep_stale_staging_leads --days 14 --apply
+```
+
+Uses `SUPABASE_URL` and a service key (`SUPABASE_SERVICE_KEY` or `SUPABASE_KEY`).
+
+---
+
 ## Testing Scripts
 
 ### `scripts/testing/e2e_flow.py`
@@ -187,6 +210,42 @@ Run end-to-end flow test.
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/testing/e2e_flow.py
+```
+
+### `scripts/testing/test_qualify_lead_promotion_e2e.py`
+
+End-to-end validation of the staging → qualification → promotion flow:
+
+- Creates `staging_leads` + related conversations/messages
+- Enqueues `intent: qualify_lead` to LeadsOrchestrator
+- Asserts promotion via Persistence (`operation: promote_staging_lead`)
+
+```powershell
+.\.venv\Scripts\python.exe scripts/testing/test_qualify_lead_promotion_e2e.py
+```
+
+### `scripts/testing/inspect_email_thread.py`
+
+Inspect whether an email thread landed in staging vs live tables and show basic diagnostics.
+
+```powershell
+.\.venv\Scripts\python.exe scripts/testing/inspect_email_thread.py --email <lead@example.com>
+```
+
+### `scripts/testing/validate_rag_to_copywriter_flow.py`
+
+Validate the inbound reply data path:
+
+- RAG → LeadsOrchestrator builds `reply_packet`
+- OutreachOrchestrator enqueues Copywriter task containing that `reply_packet`
+- (Optional) Auto-send enqueues Sequencer and observes a `sent` result
+
+```powershell
+# Run basic validation
+.\.venv\Scripts\python.exe scripts/testing/validate_rag_to_copywriter_flow.py
+
+# Verify auto-send → sequencing → sent
+.\.venv\Scripts\python.exe scripts/testing/validate_rag_to_copywriter_flow.py --auto-send
 ```
 
 ### `scripts/testing/load_test.py`

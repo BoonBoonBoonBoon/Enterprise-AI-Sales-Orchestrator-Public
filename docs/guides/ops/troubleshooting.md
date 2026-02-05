@@ -55,11 +55,10 @@ APIError: Invalid API key
 
    ```bash
    SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-   SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIs...
+   SUPABASE_ANON_KEY=your-anon-key
    ```
 
 2. **Check key is anon key, not service role:**
-
    - Go to Supabase Dashboard → Settings → API
    - Copy "anon public" key
 
@@ -193,6 +192,95 @@ ImportError: cannot import name 'settings' from 'config.settings'
 
 ---
 
+### Sequencer Not Called / Emails Not Sending
+
+**Symptoms:**
+
+- Copywriter is generating output, but no emails are being sent.
+- Sequencer results are empty or not growing.
+
+**Checklist:**
+
+1. **Confirm the sequencing stream name**
+
+   The sequencer consumes:
+   - `{tenant}:agents:sequencing:tasks`
+   - `{tenant}:agents:sequencing:results`
+
+2. **Verify auto-send context exists (Redis hash)**
+
+   Auto-send relies on a Redis hash entry keyed by the copywriter task id:
+
+   ```bash
+   redis-cli HLEN agentic-dev:outreach:auto_send
+   redis-cli HGETALL agentic-dev:outreach:auto_send
+   ```
+
+   If this hash is empty, Outreach will ack the copywriter result and do nothing.
+
+3. **Check stream lengths**
+
+   ```bash
+   redis-cli XLEN agentic-dev:agents:copywriter:results
+   redis-cli XLEN agentic-dev:agents:sequencing:tasks
+   redis-cli XLEN agentic-dev:agents:sequencing:results
+   ```
+
+4. **Inspect Outreach logs around auto-send**
+
+   ```powershell
+   cd deployment
+   docker compose logs -n 200 outreach_orchestrator | Select-String -Pattern "register_auto_send|Auto-sent via sequencer|Failed to register auto-send"
+   ```
+
+**Common root causes:**
+
+- Redis client missing hash operations (no `HSET/HGET/HDEL`) so auto-send context never stores.
+- Key prefix mismatch (double-prefixed namespace) causing reads/writes to different keys.
+- Looking at the wrong stream (`agents:channel_sequencer:tasks` instead of `agents:sequencing:tasks`).
+
+**Fast validation:**
+
+Run the built-in script to verify the entire path:
+
+```powershell
+cd deployment
+docker compose exec -T outreach_orchestrator python scripts/testing/validate_rag_to_copywriter_flow.py --auto-send
+```
+
+---
+
+## Data Issues
+
+### Inbound email history “disappeared” / not promoted
+
+**Symptoms:**
+
+- A previously visible staging thread/messages appear to vanish after a new inbound email.
+- The lead does not show up in `leads` / `conversations` / `messages` even though it should qualify.
+
+**What to check:**
+
+1. **Staging rows should be archived, not deleted**
+   - Look for `archived_at` on `staging_leads` / `staging_conversations` / `staging_messages`.
+   - If rows were hard-deleted and you have cascading FKs, entire threads can disappear.
+
+2. **Promotion task was enqueued and processed**
+   - Confirm a Persistence task with `operation: promote_staging_lead` was sent.
+   - Check PersistenceAgent logs for NOT NULL / FK constraint errors.
+
+3. **Use the inspection script**
+
+   ```powershell
+   & ".venv/Scripts/python.exe" scripts/testing/inspect_email_thread.py --email <lead@example.com>
+   ```
+
+4. **Run the opt-in E2E smoke test** (requires consumers running)
+
+   ```powershell
+   & ".venv/Scripts/python.exe" scripts/testing/test_qualify_lead_promotion_e2e.py
+   ```
+
 ### Message Stuck in Pending
 
 **Symptoms:** Messages never acknowledged, consumer keeps retrying.
@@ -267,7 +355,6 @@ PostgrestAPIError: new row violates row-level security policy
    ```
 
 2. **Verify role permissions:**
-
    - `agent_reader` → SELECT only
    - `agent_writer` → CRUD operations
 

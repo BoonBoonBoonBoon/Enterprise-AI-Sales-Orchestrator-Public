@@ -68,6 +68,127 @@ GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO agent_writer;
 
 ## RLS Policies
 
+## Tenant Isolation (Recommended Pattern)
+
+Tenant isolation should be enforced using a single helper function:
+
+- `public.get_current_client_id()`
+
+This keeps policies consistent and allows the tenant-resolution logic to evolve without rewriting every policy.
+
+Conceptually:
+
+```mermaid
+flowchart LR
+    S[DB session var<br/>app.current_client] --> CID[get_current_client_id()]
+    J[JWT claims<br/>request.jwt.claims] --> CID
+    M[user_client_memberships] --> CID
+    CID --> P[RLS policies]
+```
+
+### Avoiding RLS recursion (important)
+
+RLS policy evaluation can recurse if a policy queries a table whose policies depend on the current table (directly or indirectly).
+In practice, this can show up as:
+
+- `infinite recursion detected in policy for relation ...`
+
+Preferred fix pattern:
+
+- Move “check membership/admin role” logic into a `SECURITY DEFINER` helper function.
+- Have policies call the helper instead of embedding subqueries that can re-enter policy evaluation.
+
+Examples used in this repo:
+
+```sql
+-- Checks admin membership without re-entering policy evaluation.
+create or replace function public.is_client_admin(p_user_id uuid, p_client_id uuid)
+returns boolean
+language sql stable security definer
+as $$
+    select exists (
+        select 1 from public.user_client_memberships
+        where user_id = p_user_id and client_id = p_client_id and role = 'admin'
+    );
+$$;
+
+-- Tenant resolver uses a helper fallback rather than querying memberships inline.
+create or replace function public.get_client_id_for_user(p_user_id uuid)
+returns uuid
+language sql stable security definer
+as $$
+    select client_id from public.user_client_memberships
+    where user_id = p_user_id
+    order by client_id
+    limit 1;
+$$;
+```
+
+### Direct client_id tables
+
+For tables that contain `client_id` directly:
+
+```sql
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation_leads ON public.leads;
+CREATE POLICY tenant_isolation_leads ON public.leads
+FOR ALL
+USING (client_id = public.get_current_client_id());
+```
+
+### Defaulting `client_id` on INSERT (safety net)
+
+For tenant-scoped tables (e.g. `mailboxes`, `drafts`), a BEFORE INSERT trigger can fill `client_id` from the resolved tenant
+so the portal/Gateway doesn’t have to pass it explicitly for every write.
+
+```sql
+create or replace function public.set_client_id_from_current()
+returns trigger
+language plpgsql security definer
+as $$
+begin
+    if new.client_id is null then
+        new.client_id := public.get_current_client_id();
+    end if;
+    return new;
+end;
+$$;
+```
+
+### Nested tables (no direct client_id)
+
+For tables like `messages` which belong to `conversations`:
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_client_id_from_conversation(conv_id uuid)
+returns uuid language sql stable security definer as $$
+    select c.client_id from public.conversations c where c.id = conv_id limit 1;
+$$;
+
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation_messages ON public.messages;
+CREATE POLICY tenant_isolation_messages ON public.messages
+FOR ALL
+USING (
+    public.get_client_id_from_conversation(conversation_id) = public.get_current_client_id()
+);
+```
+
+### Service role
+
+The Supabase `service_role` should have full access for migrations/admin automation:
+
+```sql
+DROP POLICY IF EXISTS service_role_messages ON public.messages;
+CREATE POLICY service_role_messages ON public.messages
+TO service_role
+USING (true) WITH CHECK (true);
+```
+
+---
+
 ### Enabling RLS
 
 ```sql
@@ -91,33 +212,15 @@ CREATE POLICY policy_name ON table_name
 
 ### Role-Based Policies
 
-```sql
--- Agent reader can SELECT all rows
-CREATE POLICY agent_reader_select ON leads
-    FOR SELECT
-    TO agent_reader
-    USING (true);
+Avoid writing tenant-bypass policies like `USING (true)` for regular authenticated users.
 
--- Agent writer can do everything
-CREATE POLICY agent_writer_all ON leads
-    FOR ALL
-    TO agent_writer
-    USING (true)
-    WITH CHECK (true);
-```
+If you need internal roles (`agent_reader`, `agent_writer`) to bypass tenant restrictions, do it explicitly and narrowly
+(and prefer `service_role` for administrative actions).
 
 ### JWT Claim Inspection
 
-Access JWT claims in policies:
-
-```sql
--- Example: Restrict to tenant
-CREATE POLICY tenant_isolation ON leads
-    FOR ALL
-    USING (
-        client_id::text = current_setting('request.jwt.claims', true)::json->>'client_id'
-    );
-```
+Policies may use `request.jwt.claims` as an input signal, but the recommended approach is to centralize all logic in
+`public.get_current_client_id()` and only compare `client_id` to that resolved value in policies.
 
 ## JWT Authentication
 

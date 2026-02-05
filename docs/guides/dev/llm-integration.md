@@ -1,4 +1,4 @@
-﻿# LLM Integration
+# LLM Integration
 
 This guide covers integrating LLMs (Large Language Models) into agents and orchestrators.
 
@@ -6,8 +6,8 @@ This guide covers integrating LLMs (Large Language Models) into agents and orche
 
 | Provider  | Status    | Models                             |
 | --------- | --------- | ---------------------------------- |
-| OpenAI    | âœ… Active | GPT-4o, GPT-4-turbo, GPT-3.5-turbo |
-| Anthropic | âœ… Active | Claude 3.5, Claude 3 Opus/Sonnet   |
+| OpenAI    | ✅ Active | GPT-4o, GPT-4-turbo, GPT-3.5-turbo |
+| Anthropic | ✅ Active | Claude 3.5, Claude 3 Opus/Sonnet   |
 
 ## Configuration
 
@@ -15,10 +15,10 @@ This guide covers integrating LLMs (Large Language Models) into agents and orche
 
 ```bash
 # OpenAI
-OPENAI_API_KEY=sk-your-key-here
+OPENAI_API_KEY=your-openai-api-key
 
 # Anthropic (alternative)
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=your-anthropic-api-key
 
 # Provider selection
 LLM_PROVIDER=openai
@@ -267,4 +267,3 @@ def create_mock_llm():
 - [Copywriter Agent](../../components/tier-3/copywriter.md)
 - [Manager Agent](../../components/tier-1/manager.md)
 - [ADR-006: LangGraph](../../architecture/decisions/006-langgraph-deep-agents.md)
-

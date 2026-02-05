@@ -1,6 +1,6 @@
-﻿# READY TO TEST: Option A - Three-Tier Flow Testing
+# READY TO TEST: Option A - Three-Tier Flow Testing
 
-## Status: âœ… All Setup Complete
+## Status: ✅ All Setup Complete
 
 All infrastructure has been built and verified. The system is ready to test.
 
@@ -13,10 +13,10 @@ python diagnostic.py
 
 Expected output:
 ```
-âœ… Redis
-âœ… Dependencies
-âœ… Files
-âœ… VirtualEnv
+✅ Redis
+✅ Dependencies
+✅ Files
+✅ VirtualEnv
 ```
 
 ### Step 2: Terminal 1 - Start Consumers
@@ -28,15 +28,15 @@ Expected output:
 ```
 ============================================================
 Starting: Manager
-âœ… Started Manager (PID: XXXX)
+✅ Started Manager (PID: XXXX)
 
 ============================================================
 Starting: Leads Orchestrator
-âœ… Started Leads Orchestrator (PID: XXXX)
+✅ Started Leads Orchestrator (PID: XXXX)
 
 ============================================================
 Starting: Outreach Orchestrator
-âœ… Started Outreach Orchestrator (PID: XXXX)
+✅ Started Outreach Orchestrator (PID: XXXX)
 ```
 
 **Leave Terminal 1 running.**
@@ -48,20 +48,20 @@ python test_manager_orchestrator_flow.py
 
 Expected flow:
 ```
-TEST 1: Manager â†’ Leads Orchestrator Delegation
-  Step 1ï¸âƒ£: Check streams before sending task...
-  Step 2ï¸âƒ£: Sending task to manager:tasks...
-  Step 3ï¸âƒ£: Waiting for Manager consumer to delegate...
-  Step 4ï¸âƒ£: Checking final state...
-  Step 5ï¸âƒ£: Reading results from leads:results...
-  âœ… PASSED
+TEST 1: Manager → Leads Orchestrator Delegation
+  Step 1️⃣: Check streams before sending task...
+  Step 2️⃣: Sending task to manager:tasks...
+  Step 3️⃣: Waiting for Manager consumer to delegate...
+  Step 4️⃣: Checking final state...
+  Step 5️⃣: Reading results from leads:results...
+  ✅ PASSED
 
-TEST 2: Manager â†’ Outreach Orchestrator Delegation
+TEST 2: Manager → Outreach Orchestrator Delegation
   [Similar flow]
-  âœ… PASSED
+  ✅ PASSED
 
 TEST SUMMARY
-  âœ… Three-tier flow is working!
+  ✅ Three-tier flow is working!
 ```
 
 ## If OpenAI Key Not Set
@@ -75,7 +75,7 @@ $env:OPENAI_API_KEY = "sk-proj-your-actual-key-here"
 
 ## What This Tests
 
-âœ… **Test 1: Manager â†’ Leads Flow**
+✅ **Test 1: Manager → Leads Flow**
 - Task: "Find 50 AI/ML startups in San Francisco"
 - Manager reads from manager:tasks
 - Manager delegates to leads:tasks
@@ -83,7 +83,7 @@ $env:OPENAI_API_KEY = "sk-proj-your-actual-key-here"
 - Results published to leads:results
 - Success = results appear in 20 seconds
 
-âœ… **Test 2: Manager â†’ Outreach Flow**
+✅ **Test 2: Manager → Outreach Flow**
 - Task: "Launch Q4 email outreach campaign"
 - Manager reads from manager:tasks
 - Manager delegates to outreach:tasks
@@ -120,7 +120,7 @@ echo $env:OPENAI_API_KEY
 # Check REDIS_URL
 echo $env:REDIS_URL
 
-# Should show: redis://<REDACTED_REDIS_URL>
+# Should show: redis://default:***@redis-15143...
 
 # Or verify local Redis works
 redis-cli PING
@@ -141,19 +141,19 @@ pip list | grep -E "redis|deepagents|langchain|openai"
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `agent/manager/manager_agent_harness.py` | Manager wrapper | âœ… Complete |
-| `agent/manager/consumer.py` | Manager consumer | âœ… Complete |
-| `start_all_consumers.py` | Startup script | âœ… Complete |
-| `test_manager_orchestrator_flow.py` | Test script | âœ… Complete |
-| `diagnostic.py` | Prerequisites checker | âœ… Complete |
-| `docs/Complete_Redis_Architecture.md` | Architecture docs | âœ… Complete |
-| `TEST_OPTION_A_GUIDE.md` | Full guide | âœ… Complete |
-| `QUICK_START.md` | Quick reference | âœ… Complete |
-| `PHASE_14_SETUP_SUMMARY.md` | Summary | âœ… Complete |
+| `agent/manager/manager_agent_harness.py` | Manager wrapper | ✅ Complete |
+| `agent/manager/consumer.py` | Manager consumer | ✅ Complete |
+| `start_all_consumers.py` | Startup script | ✅ Complete |
+| `test_manager_orchestrator_flow.py` | Test script | ✅ Complete |
+| `diagnostic.py` | Prerequisites checker | ✅ Complete |
+| `docs/Complete_Redis_Architecture.md` | Architecture docs | ✅ Complete |
+| `TEST_OPTION_A_GUIDE.md` | Full guide | ✅ Complete |
+| `QUICK_START.md` | Quick reference | ✅ Complete |
+| `PHASE_14_SETUP_SUMMARY.md` | Summary | ✅ Complete |
 
-## After Tests Pass âœ…
+## After Tests Pass ✅
 
-Once both tests show `âœ… PASSED`:
+Once both tests show `✅ PASSED`:
 
 1. **Next:** Build Tier 3 agents (Tasks 9-14)
    - Copywriter Consumer
@@ -214,18 +214,18 @@ python scripts/streams_health.py
 ## System Architecture Verified
 
 ```
-âœ… Tier 1: Manager (external entry point)
+✅ Tier 1: Manager (external entry point)
    - manager:tasks (receives requests)
    - manager:results (publishes final results)
    - Harness wrapper with retry logic
    - Consumer group for scaling
 
-âœ… Tier 2: Orchestrators (business logic)
+✅ Tier 2: Orchestrators (business logic)
    - leads:tasks/results (discovery, qualification)
    - outreach:tasks/results (campaigns, touchpoints)
    - Both have consumers and harness wrappers
 
-â³ Tier 3: Operational Agents (NOT YET BUILT)
+⏳ Tier 3: Operational Agents (NOT YET BUILT)
    - copywriter:tasks/results
    - booking:tasks/results
    - sequencing:tasks/results
@@ -237,17 +237,16 @@ python scripts/streams_health.py
 ## Next Steps
 
 ### Immediate (Now)
-1. âœ… Run: `python diagnostic.py`
-2. âœ… Terminal 1: `python start_all_consumers.py`
-3. âœ… Terminal 2: `python test_manager_orchestrator_flow.py`
+1. ✅ Run: `python diagnostic.py`
+2. ✅ Terminal 1: `python start_all_consumers.py`
+3. ✅ Terminal 2: `python test_manager_orchestrator_flow.py`
 
 ### After Tests Pass
-1. âœ… Review test results
-2. â³ Commit changes
-3. â³ Build Tier 3 agents
-4. â³ Test complete flow
+1. ✅ Review test results
+2. ⏳ Commit changes
+3. ⏳ Build Tier 3 agents
+4. ⏳ Test complete flow
 
 ---
 
-**Ready to test!** Follow the three steps above. ðŸš€
-
+**Ready to test!** Follow the three steps above. 🚀

@@ -1,4 +1,4 @@
-﻿###################################################################################################
+###################################################################################################
 # docker-compose.yml (Updated for Three-Tier + Services Architecture)
 # -------------------------------------------------------------------------------------------------
 # Purpose: Define a local development stack consisting of:
@@ -82,7 +82,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
       TENANT_ID: ${TENANT_ID:-agentic-dev}
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
@@ -100,7 +100,7 @@ services:
   #################################################################################################
   # TIER 2: Leads Orchestrator (Business Logic)
   # -------------------------------------------------------------------------------------------------
-  # Coordinates leads workflows: discovery â†’ qualification â†’ persistence
+  # Coordinates leads workflows: discovery → qualification → persistence
   # Delegates to tier_3 agents
   #################################################################################################
   leads_orchestrator:
@@ -114,7 +114,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
       TENANT_ID: ${TENANT_ID:-agentic-dev}
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
@@ -132,7 +132,7 @@ services:
   #################################################################################################
   # TIER 2: Outreach Orchestrator (Business Logic)
   # -------------------------------------------------------------------------------------------------
-  # Coordinates outreach workflows: copywriting â†’ scheduling â†’ tracking
+  # Coordinates outreach workflows: copywriting → scheduling → tracking
   # Delegates to tier_3 agents
   #################################################################################################
   outreach_orchestrator:
@@ -146,7 +146,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
       TENANT_ID: ${TENANT_ID:-agentic-dev}
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
@@ -178,7 +178,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
       TENANT_ID: ${TENANT_ID:-agentic-dev}
       OPS_HB_ENABLED: ${OPS_HB_ENABLED:-1}
@@ -210,7 +210,7 @@ services:
     environment:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -245,7 +245,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -278,7 +278,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -311,7 +311,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -342,7 +342,7 @@ services:
     env_file:
       - ../.env
     environment:
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-agentic}
     command: ["python", "scripts/health_server.py", "--host", "0.0.0.0", "--port", "8080", "--enable-metrics"]
     ports:
@@ -375,7 +375,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      REDIS_URL: ${REDIS_URL_DOCKER:-redis://<REDACTED_REDIS_URL>
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379/0}
       QUEUE_BACKEND: redis
       INGEST_TO_DB: "true"
     networks:
@@ -440,4 +440,3 @@ networks:
 # - Configure horizontal autoscaling based on Redis consumer lag
 # - Enable distributed tracing (OpenTelemetry integration)
 ###################################################################################################
-

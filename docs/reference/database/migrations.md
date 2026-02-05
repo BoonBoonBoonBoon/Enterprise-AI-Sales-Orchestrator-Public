@@ -28,6 +28,69 @@ supabase db push
 supabase db pull
 ```
 
+## Security migrations (Jan 2026)
+
+These migrations implement production-grade tenant isolation + invitations:
+
+- `supabase/migrations/20260128120000_invitations_audit.sql`
+  - `pending_invitations` table
+  - `accept_invitation()` function
+  - audit_log column extensions + indexes
+- `supabase/migrations/20260128130000_complete_tenant_isolation.sql`
+  - RLS enablement + policies for remaining tenant tables
+  - helper lookup functions for nested tables (messages/staging/agent subtasks)
+  - creates `mailboxes` and `drafts` tables (if missing) with RLS
+
+## Tenant provisioning + portal profile (Feb 2026)
+
+These migrations support tenant-aware portal signup + profile persistence and harden RLS to avoid recursion:
+
+- `supabase/migrations/20260203090000_clients_profile_and_rls.sql`
+  - Expands `clients` fields for portal usage
+  - Adds/ensures `user_client_memberships`
+  - Introduces tenant resolver `public.get_current_client_id()` (later hardened)
+  - Tenant-aware RLS policy for `clients`
+- `supabase/migrations/20260203100000_user_client_memberships_rls.sql`
+  - RLS enablement/policies for membership table
+- `supabase/migrations/20260203103000_auth_user_provisioning.sql`
+  - Auth trigger wiring for provisioning (signup lifecycle)
+- `supabase/migrations/20260203110000_fix_signup_rls.sql`
+  - Signup-related RLS adjustments to allow provisioning to complete cleanly
+- `supabase/migrations/20260203120000_user_profiles_and_signup_sync.sql`
+  - Adds `public.user_profiles`
+  - Adds `upsert_user_profile_from_auth()` trigger function
+  - Adds `create_client_on_signup()` tenant provisioning function
+- `supabase/migrations/20260203121000_accept_invitation_sets_client_id.sql`
+  - Ensures invitation acceptance sets/propagates `client_id` consistently
+- `supabase/migrations/20260203123000_fix_auth_signup_trigger.sql`
+  - Fixes provisioning trigger behavior during auth user insert
+- `supabase/migrations/20260203130000_force_auth_signup_trigger_after.sql`
+  - Forces the auth provisioning trigger to be `AFTER INSERT` (prevents FK timing issues)
+- `supabase/migrations/20260203133000_fix_user_client_memberships_policy.sql`
+  - Adds `public.is_client_admin()` SECURITY DEFINER helper
+  - Rewrites membership admin policy to avoid recursive RLS
+- `supabase/migrations/20260203140000_tenant_resolution_and_client_defaults.sql`
+  - Adds `public.get_client_id_for_user()` SECURITY DEFINER helper
+  - Hardens `public.get_current_client_id()` to avoid recursion
+  - Adds insert-default trigger `set_client_id_from_current()` for `mailboxes` and `drafts`
+
+---
+
+## When migrations get “stuck” (remote history mismatch)
+
+If Supabase CLI reports that a remote migration version exists but the local file is missing or renamed, repair history
+and re-run:
+
+```powershell
+supabase migration list
+
+# Mark the problematic version as reverted (example version)
+supabase migration repair --status reverted 20260128
+
+# Then push again
+supabase db push --include-all
+```
+
 ## Migration Workflow
 
 ### 1. Create Migration
@@ -73,6 +136,19 @@ supabase db push
 
 # Or via CI/CD
 ```
+
+---
+
+## Recent / Notable Migrations
+
+### Atomic staging-lead promotion (RPC)
+
+The system includes an optional migration that adds a PostgreSQL function for atomic promotion of a staging lead into primary tables:
+
+- File: `supabase/migrations/20260124_atomic_promotion_rpc.sql`
+- Function: `public.promote_staging_lead_atomic(p_staging_lead_id uuid, p_lead_id uuid) returns jsonb`
+
+The Persistence promotion path will attempt this RPC first and fall back to the legacy multi-step copy/archive logic if the RPC is unavailable.
 
 ---
 

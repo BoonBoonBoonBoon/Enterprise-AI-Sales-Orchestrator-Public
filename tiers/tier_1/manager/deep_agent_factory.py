@@ -17,6 +17,7 @@ from deepagents.graph import (
 )
 from langchain_openai import ChatOpenAI
 from langchain.tools import BaseTool
+from core.security.prompt_hardening import get_hardened_internal_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +81,8 @@ def create_manager_deep_agent(
     logger.info("    - FilesystemMiddleware (context storage)")
     logger.info("    - SubAgentMiddleware (specialist spawning)")
     
-    # Create system prompt for Manager
-    system_prompt = f"""You are the Manager Agent - the Tier 1 strategic decision-maker in a 3-tier autonomous system.
+    # Create system prompt for Manager with security hardening
+    base_system_prompt = f"""You are the Manager Agent - the Tier 1 strategic decision-maker in a 3-tier autonomous system.
 
 ## SYSTEM ARCHITECTURE
 - **Tier 1 (You)**: Receive goals from external sources. Decide routing. Delegate to Tier 2. Return results.
@@ -156,6 +157,9 @@ Tenant: {tenant_id}
 Context Storage: {filesystem_path}
 
 You receive tasks. You route them. You return confirmation. No questions. No waiting."""
+    
+    # Apply security hardening for internal agent
+    system_prompt = get_hardened_internal_prompt(base_system_prompt)
     
     # Create Deep Agent with automatic middleware
     try:

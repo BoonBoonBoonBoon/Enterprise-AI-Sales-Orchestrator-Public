@@ -1,4 +1,4 @@
-﻿# Redis Implementation Guide
+# Redis Implementation Guide
 
 **Status:** Active  
 **Last Updated:** January 2026
@@ -36,7 +36,7 @@ def get_redis_client():
 ```bash
 REDIS_URL=redis://localhost:6379
 # or for Redis Cloud
-REDIS_URL=redis://<REDACTED_REDIS_URL>
+REDIS_URL=redis://:password@host:port
 ```
 
 ---
@@ -228,10 +228,10 @@ for attempt in retry.attempts():
 ### 1. Always Use Tenant Prefix
 
 ```python
-# âœ… Correct
+# ✅ Correct
 stream = f"{tenant_id}:agents:rag:tasks"
 
-# âŒ Wrong - missing tenant
+# ❌ Wrong - missing tenant
 stream = "agents:rag:tasks"
 ```
 
@@ -247,11 +247,11 @@ assert_agents_stream(stream)  # Raises if not an agent stream
 ### 3. Acknowledge After Processing
 
 ```python
-# âœ… Correct - ack after successful processing
+# ✅ Correct - ack after successful processing
 result = process_message(message)
 redis_client.xack(stream, group, message_id)
 
-# âŒ Wrong - ack before processing (loses messages on crash)
+# ❌ Wrong - ack before processing (loses messages on crash)
 redis_client.xack(stream, group, message_id)
 result = process_message(message)
 ```
@@ -278,4 +278,3 @@ messages = redis_client.xreadgroup(..., block=5000)
 - [Architecture Overview](overview.md)
 - [Operations & Monitoring](operations.md)
 - [Agent Harness](https://github.com/BoonBoonBoonBoon/Agentic-System/blob/master/core/harness/README.md)
-

@@ -3,3 +3,4 @@ redis
 pandas
 plotly
 python-dotenv
+supabase

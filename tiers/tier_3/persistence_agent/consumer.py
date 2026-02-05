@@ -31,7 +31,10 @@ from core.envelope import (
     error as create_error_envelope,
     to_redis_fields,
 )
+from core.dlq import DeadLetterMessage, DLQ_SUFFIX, DLQ_MAX_RETRIES, DLQ_ENABLED
+from core.observability import start_metrics_server, start_redis_stream_metrics
 from config.persistence_config import get_read_allowlist, get_write_allowlist
+from config.settings import validate_keys
 
 try:
     from services.persistence.adapters.supabase_adapter import SupabaseAdapter  # type: ignore
@@ -251,6 +254,8 @@ class PersistenceAgentConsumer:
 
         self.task_stream = f"{tenant_id}:agents:persistence:tasks"
         self.result_stream = f"{tenant_id}:agents:persistence:results"
+        self.dlq_stream = f"{self.task_stream}{DLQ_SUFFIX}"
+        self.max_retries = DLQ_MAX_RETRIES
 
         cache_adapter = RedisHashAdapter(redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"), tenant_id=tenant_id)
         adapter = cache_adapter
@@ -355,6 +360,10 @@ class PersistenceAgentConsumer:
 
             task_data = envelope.payload
 
+            # Propagate correlation into task payload so downstream writes can persist it.
+            if isinstance(task_data, dict) and envelope.metadata.correlation_id:
+                task_data = {**task_data, "correlation_id": envelope.metadata.correlation_id}
+
             context = {
                 "request_id": envelope.metadata.task_id,
                 "correlation_id": envelope.metadata.correlation_id,
@@ -407,6 +416,60 @@ class PersistenceAgentConsumer:
                 extra={"message_id": message_id},
                 exc_info=True,
             )
+            await self._handle_failure(message_id, message_data, e, envelope=locals().get("envelope"))
+
+    async def _get_delivery_count(self, message_id: str) -> int:
+        try:
+            pending = await self.redis_client.xpending_range(
+                self.task_stream,
+                self.consumer_group,
+                min=message_id,
+                max=message_id,
+                count=1,
+            )
+            if pending:
+                entry = pending[0]
+                if isinstance(entry, dict):
+                    return int(entry.get("times_delivered", 1))
+                if isinstance(entry, (list, tuple)) and len(entry) >= 4:
+                    return int(entry[3])
+        except Exception:
+            pass
+        return 1
+
+    async def _handle_failure(self, message_id: str, message_data: Dict[str, bytes], error: Exception, envelope=None) -> None:
+        if not DLQ_ENABLED:
+            return
+        failure_count = await self._get_delivery_count(message_id)
+        if failure_count < self.max_retries:
+            return
+
+        dlq_message = DeadLetterMessage(
+            original_message=message_data,
+            original_stream=self.task_stream,
+            original_message_id=message_id,
+            failure_reason="max_retries_exceeded",
+            failure_count=failure_count,
+            last_error=str(error),
+            error_type=type(error).__name__,
+            consumer_name=self.consumer_name,
+            tenant_id=self.tenant_id,
+        )
+        await self.redis_client.xadd(self.dlq_stream, dlq_message.to_dict())
+
+        if envelope is not None:
+            try:
+                error_envelope = create_error_envelope(
+                    original=envelope,
+                    error_msg=str(error),
+                    source="agents:persistence",
+                    code="PERSISTENCE_ERROR",
+                )
+                await self.redis_client.xadd(self.result_stream, to_redis_fields(error_envelope))
+            except Exception:
+                pass
+
+        await self.redis_client.xack(self.task_stream, self.consumer_group, message_id)
 
     async def run(self, block_ms: int = 5000):
         await self.ensure_consumer_group()
@@ -431,7 +494,16 @@ class PersistenceAgentConsumer:
                 )
 
                 if not messages:
-                    continue
+                    pending = await self.redis_client.xreadgroup(
+                        groupname=self.consumer_group,
+                        consumername=self.consumer_name,
+                        streams={self.task_stream: "0"},
+                        count=1,
+                        block=1,
+                    )
+                    if not pending:
+                        continue
+                    messages = pending
 
                 for _stream, stream_messages in messages:
                     for message_id, message_data in stream_messages:
@@ -452,6 +524,11 @@ async def main():
     except Exception:
         pass
 
+    validate_keys(raise_on_missing=True)
+
+    # Start metrics server for this component
+    start_metrics_server(component="persistence_agent")
+
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = int(os.getenv("REDIS_PORT", "6379"))
     redis_password = os.getenv("REDIS_PASSWORD")
@@ -467,6 +544,20 @@ async def main():
             password=redis_password,
             decode_responses=False,
         )
+
+    metrics_redis_url = redis_url
+    if not metrics_redis_url:
+        if redis_password:
+            metrics_redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/0"
+        else:
+            metrics_redis_url = f"redis://{redis_host}:{redis_port}/0"
+
+    start_redis_stream_metrics(
+        redis_url=metrics_redis_url,
+        tenant_id=tenant_id,
+        component="persistence_agent",
+        streams=[(f"{tenant_id}:agents:persistence:tasks", "persistence_workers")],
+    )
 
     try:
         await redis_client.ping()
