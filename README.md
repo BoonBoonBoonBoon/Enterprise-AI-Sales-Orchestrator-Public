@@ -1,19 +1,36 @@
-# Agentic System — Three-Tier Architecture
+# Enterprise AI Sales Orchestrator (Agentic System)
 
-**Disclaimer**
+The Agentic System is an **enterprise-style, multi-agent orchestration platform** built to coordinate end-to-end B2B sales workflows — from lead discovery and qualification to drafting replies and sequencing outreach.
 
-- This repository is a public demonstration of a private product developed by my LLC.
-- It does not reflect the current state, full functionality, or progress of the actual product under active development.
-- All secrets have been removed to protect confidentiality for both myself and clients.
-- Portions of the codebase and infrastructure have been modified, mocked, or simplified for privacy, testing, and demonstration purposes.
-- This project is not open source. It is provided solely as an artistic/illustrative showcase.
-- The code in this repository will not run out-of-the-box. Users are expected to design and implement their own features, configurations, and integrations if they wish to experiment with it.
+This repository is best read as a **systems + architecture showcase**:
 
-## Overview
+- A three-tier, event-driven design using **Redis Streams** for async communication.
+- A standardized **message envelope** for provenance and traceability.
+- Tiered separation between **policy (Manager)**, **business workflows (Orchestrators)**, and **execution (Agents)**.
 
-A production-ready, three-tier agent orchestration system with separated concerns, provenance tracking, and horizontal scalability. Built for reliability, maintainability, and clear separation between strategic decisions, business logic, and execution.
+## Read the Docs (primary)
 
-### Architecture
+The main documentation lives on GitHub Pages:
+
+- https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
+
+If you only read one thing, start here:
+
+- System overview: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/concepts/system-overview/
+- Three-tier architecture: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/concepts/three-tier-architecture/
+- Redis Streams model: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/concepts/redis-streams/
+
+## What this is
+
+At a high level, the system behaves like a distributed “assembly line” for sales operations:
+
+- **Tier 1 — Manager (strategic):** decides what to do next and routes work.
+- **Tier 2 — Orchestrators (business logic):** run workflows (lead qualification, inbound triage, outreach sequencing).
+- **Tier 3 — Agents (execution):** do atomic work (RAG retrieval, persistence CRUD, copywriting, classification).
+
+All coordination is **vertical-only** (Manager ↔ Orchestrators ↔ Agents). This prevents cross-workflow coupling and keeps the system debuggable.
+
+### Architecture (at a glance)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -71,15 +88,30 @@ A production-ready, three-tier agent orchestration system with separated concern
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Key Features**
+## Key capabilities
 
-- **Three-tier architecture** with clear separation of concerns (strategic, business logic, execution)
-- **Horizontal scalability** via Redis Streams consumer groups
-- **Provenance tracking** with standardized JSON envelope for agent-to-agent communication
-- **Pluggable services** for persistence, vector search, and external APIs
-- **Unified harness** with retry strategies, checkpointing, and observability
-- **Production-ready** with Docker support, monitoring, and health checks
-- **Test coverage** with unit and integration test suites
+- **Three-tier architecture** (policy → workflows → execution)
+- **Event-driven concurrency** via Redis Streams + consumer groups
+- **Typed/standardized envelopes** for provenance and debugging
+- **Pluggable services** (persistence adapters, vector DB pipeline, email providers)
+- **Operational guardrails** (retries, DLQ, graceful shutdown, health endpoints)
+- **Deployment patterns** (Docker Compose / K8s manifests / Helm chart)
+
+## Repository status / scope
+
+- This is a **public demonstration** of a private product.
+- Secrets have been removed/redacted; docs use placeholders.
+- Some components may be mocked, partially implemented, or non-functional without your own credentials and infrastructure.
+
+## Where to look in the code
+
+- Tier 1 Manager: `tiers/tier_1/manager/`
+- Tier 2 Orchestrators: `tiers/tier_2/`
+- Tier 3 Agents: `tiers/tier_3/`
+- Shared framework: `core/` (envelope, harness, DLQ, shutdown, intent)
+- Services: `services/` (Redis, persistence, email, vector pipeline)
+- API gateway: `api/gateway/`
+- Portals (Next.js): `apps/`
 
 ## Project Structure
 
@@ -124,18 +156,24 @@ agentic-system/
 └── config/                     # Configuration files
 ```
 
-## Quick Start
+## Setup (quick, detailed guide in docs)
 
-### Development Setup
+For full instructions, use the docs:
 
-1. **Clone and navigate to repository**
+- Installation: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/getting-started/installation/
+- Quick start: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/getting-started/quickstart/
+- Environment variables: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/getting-started/environment/
+
+### Minimal local workflow
+
+1. Clone and enter the repo
 
 ```powershell
-git clone <repository-url>
-cd agentic-system
+git clone https://github.com/BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public.git
+cd "Enterprise-AI-Sales-Orchestrator-Public"
 ```
 
-2. **Create virtual environment**
+2. Python environment
 
 ```powershell
 python -m venv .venv
@@ -143,14 +181,14 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-3. **Configure environment**
+3. Configure environment
 
 ```powershell
-cp .env.example .env
+Copy-Item .env.example .env
 # Edit .env with your configuration
 ```
 
-4. **Run tests**
+4. Run tests
 
 ```powershell
 # Unit tests
@@ -163,7 +201,7 @@ pytest tests/integration/ -v
 pytest -v
 ```
 
-### Docker Deployment
+### Docker (optional)
 
 1. **Build images**
 
@@ -198,7 +236,7 @@ docker compose ps
 docker compose logs -f manager
 ```
 
-### Validate Inbound Reply → Auto-send
+### Validate reply pipeline (optional)
 
 The quickest end-to-end validation for reply context + sequencing is:
 
@@ -214,9 +252,10 @@ This confirms:
 - Outreach enqueues Copywriter and registers auto-send context
 - Sequencer receives a task and emits a `sent` result
 
-## Usage Examples
+## Next steps
 
-### Tier 1: Strategic Orchestration
+- Read the docs: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
+- Start here for architecture: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/concepts/three-tier-architecture/
 
 ```python
 from tiers.tier_1.manager import ManagerAgent, ManagerAgentHarness
