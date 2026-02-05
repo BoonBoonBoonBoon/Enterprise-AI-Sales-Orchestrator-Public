@@ -1,0 +1,57 @@
+{{- if .Values.apiGateway.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: {{ include "agentic.namespace" . }}
+  labels:
+    app: api-gateway
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  selector:
+    app: api-gateway
+---
+{{- end }}
+{{- if .Values.portal.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: portal
+  namespace: {{ include "agentic.namespace" . }}
+  labels:
+    app: portal
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app: portal
+---
+{{- end }}
+{{- if .Values.healthServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-server
+  namespace: {{ include "agentic.namespace" . }}
+  labels:
+    app: health-server
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: health-server
+---
+{{- end }}

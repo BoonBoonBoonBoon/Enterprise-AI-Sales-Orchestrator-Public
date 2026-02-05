@@ -1,0 +1,25 @@
+Saved idea: Smooth technical background (Experimental-4)
+
+What it is
+- A smooth gradient-mesh background with a slow rotating sheen, light grain, drifting circuit lines, and gentle mist.
+- Mouse movement updates CSS vars --mx/--my for subtle parallax in gradients.
+
+Where it came from
+- CSS originally implemented in: apps/portal-experimental-4/src/app/globals.css
+- JS parallax originally implemented in: apps/portal-experimental-4/src/app/page.tsx
+
+How to reuse (quick)
+1) Paste background.css contents into your globals.css (or import it).
+2) In your hero left panel container:
+   - Add className="tech-bg"
+   - Add children overlays near the top of that container:
+     <div className="tech-mesh" />
+     <div className="tech-lines" />
+     <div className="atmospheric-mist" />
+3) Add the mousemove handler:
+   - Either copy the logic from page.tsx or use the useCssVarParallax hook.
+4) Keep your hero content (orb + speech bubble) wrapped in a z-10 container.
+
+Notes
+- Respects prefers-reduced-motion if you keep the checks.
+- All animations are opacity/transform/background-position (performance-friendly).

@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm, friendly light theme - inviting for B2B */
+    --background: 40 33% 99%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --accent: 31 97% 56%;
+    --accent-foreground: 0 0% 100%;
+
+    --ring: 221 83% 53%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Soft gradient backgrounds */
+  .bg-gradient-warm {
+    background: linear-gradient(135deg, hsl(40 33% 99%) 0%, hsl(220 20% 97%) 50%, hsl(240 20% 98%) 100%);
+  }
+
+  .bg-gradient-hero {
+    background: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(221 83% 53% / 0.12), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 60%, hsl(31 97% 56% / 0.08), transparent),
+      radial-gradient(ellipse 50% 30% at 10% 80%, hsl(221 83% 53% / 0.06), transparent);
+  }
+
+  /* Friendly gradient text */
+  .gradient-text-warm {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(221 83% 53%), hsl(262 83% 58%));
+  }
+
+  /* Soft card style */
+  .card-soft {
+    @apply bg-white rounded-2xl border border-border/60 shadow-sm;
+    box-shadow: 
+      0 1px 3px hsl(220 20% 10% / 0.04),
+      0 8px 24px hsl(220 20% 10% / 0.06);
+  }
+
+  .card-soft:hover {
+    box-shadow: 
+      0 1px 3px hsl(220 20% 10% / 0.04),
+      0 12px 32px hsl(220 20% 10% / 0.10);
+  }
+
+  /* Blob backgrounds */
+  .blob {
+    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+    filter: blur(40px);
+  }
+
+  /* Trust badge style */
+  .trust-badge {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium;
+    @apply bg-green-50 text-green-700 border border-green-200;
+  }
+}

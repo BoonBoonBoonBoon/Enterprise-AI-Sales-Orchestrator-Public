@@ -1,0 +1,50 @@
+{{- range .Values.workers }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  namespace: {{ include "agentic.namespace" $ }}
+  labels:
+    app: {{ .name }}
+    component: worker
+spec:
+  replicas: {{ .replicas }}
+  selector:
+    matchLabels:
+      app: {{ .name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .name }}
+        component: worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+        - name: {{ .name }}
+          image: {{ $.Values.images.worker | quote }}
+          imagePullPolicy: IfNotPresent
+          command: {{ toYaml .command | nindent 12 }}
+          env:
+            - name: REDIS_CONSUMER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: agentic-config
+            - secretRef:
+                name: agentic-secrets
+          resources:
+{{ toYaml .resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+{{- end }}

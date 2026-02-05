@@ -1,0 +1,101 @@
+{{- if .Values.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway
+  namespace: {{ include "agentic.namespace" . }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+  minReplicas: {{ .Values.hpa.apiGateway.minReplicas }}
+  maxReplicas: {{ .Values.hpa.apiGateway.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.hpa.apiGateway.averageCpuUtilization }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: portal
+  namespace: {{ include "agentic.namespace" . }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: portal
+  minReplicas: {{ .Values.hpa.portal.minReplicas }}
+  maxReplicas: {{ .Values.hpa.portal.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.hpa.portal.averageCpuUtilization }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rag-agent
+  namespace: {{ include "agentic.namespace" . }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rag-agent
+  minReplicas: {{ .Values.hpa.ragAgent.minReplicas }}
+  maxReplicas: {{ .Values.hpa.ragAgent.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.hpa.ragAgent.averageCpuUtilization }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: copywriter-agent
+  namespace: {{ include "agentic.namespace" . }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: copywriter-agent
+  minReplicas: {{ .Values.hpa.copywriterAgent.minReplicas }}
+  maxReplicas: {{ .Values.hpa.copywriterAgent.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.hpa.copywriterAgent.averageCpuUtilization }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: persistence-agent
+  namespace: {{ include "agentic.namespace" . }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: persistence-agent
+  minReplicas: {{ .Values.hpa.persistenceAgent.minReplicas }}
+  maxReplicas: {{ .Values.hpa.persistenceAgent.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.hpa.persistenceAgent.averageCpuUtilization }}
+{{- end }}

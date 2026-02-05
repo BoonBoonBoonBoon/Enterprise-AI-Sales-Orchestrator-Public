@@ -1,0 +1,249 @@
+# Lead Qualification Configuration
+# Defines scoring signals, thresholds, and fast-track rules for lead qualification.
+#
+# SCORING MODEL: Hybrid (Rules first, LLM fallback for ambiguous)
+# - Scores 0-100, with 70+ triggering auto-promotion to leads table
+# - Any high-score inbound can fast-track directly to leads (no staging)
+#
+# TABLES:
+#   staging_leads → leads (promotion when score >= threshold)
+#   staging_conversations → conversations (copied on promotion)
+#   staging_messages → messages (copied on promotion)
+
+version: "1.0.0"
+
+# =============================================================================
+# SCORING THRESHOLDS
+# =============================================================================
+thresholds:
+  # Auto-promote from staging_leads to leads when score >= this
+  auto_promote: 70
+  
+  # Skip staging entirely (fast-track to leads) when score >= this
+  fast_track: 85
+  
+  # Disqualify lead when score <= this (archive staging_lead)
+  disqualify: 20
+
+# =============================================================================
+# SIGNAL WEIGHTS
+# Each signal contributes points to the total score (capped at 100)
+# =============================================================================
+signals:
+  # --- Email Classification Signals (from ClassifierAgent) ---
+  email_category:
+    business_inquiry: 25    # High intent signal
+    personal: 20            # Direct engagement
+    unknown: 5              # Needs review
+    newsletter: -10         # Low intent
+    marketing: -10          # Low intent
+    transactional: 0        # Neutral
+    auto_reply: -5          # No action needed
+    bounce: -30             # Problem indicator
+    spam: -50               # Hard disqualify
+
+  # --- Conversation Signals ---
+  conversation:
+    has_reply: 15           # They replied to us
+    multiple_messages: 10   # 3+ messages in thread
+    quick_response: 10      # Replied within 24 hours
+    asked_question: 10      # Shows interest
+    mentioned_budget: 15    # Purchase intent
+    mentioned_timeline: 10  # Urgency
+    requested_meeting: 20   # High intent
+    requested_demo: 20      # High intent
+    positive_sentiment: 10  # Good vibes
+    negative_sentiment: -10 # Complaint/issue
+
+  # --- Lead Profile Signals ---
+  profile:
+    has_company: 10         # B2B indicator
+    has_title: 5            # Professional context
+    has_phone: 5            # Contact enrichment
+    has_linkedin: 5         # Contact enrichment
+    known_domain: 10        # Not freemail (@gmail, @yahoo, etc.)
+    target_industry: 15     # Matches campaign target
+    target_company_size: 10 # Matches ICP
+    decision_maker_title: 15 # VP, Director, C-level, Owner
+
+  # --- Engagement Signals ---
+  engagement:
+    first_contact_inbound: 10   # They reached out first
+    campaign_reply: 25          # Replied to our campaign email
+    link_clicked: 5             # Clicked link in email
+    attachment_sent: 5          # Sent us a file
+
+  # --- Negative Signals ---
+  negative:
+    unsubscribe_request: -30    # Wants out
+    not_interested: -25         # Explicit rejection
+    wrong_contact: -20          # Not the right person
+    competitor: -15             # Competitor sniffing
+    student_academic: -10       # Not a buyer
+
+# =============================================================================
+# FAST-TRACK RULES
+# If ANY rule matches, skip staging and write directly to leads table
+# =============================================================================
+fast_track_rules:
+  # Campaign reply = known lead replied to our outreach
+  - name: "campaign_reply"
+    description: "Lead replied to a campaign email"
+    conditions:
+      - lead_source: "leads"           # Already in leads table (from campaign)
+      - email_direction: "inbound"     # They're replying
+    min_score: 50                      # But still require some qualification
+
+  # High-value inbound = new lead with strong signals
+  - name: "high_value_inbound"
+    description: "High-score new inbound lead"
+    conditions:
+      - lead_source: "new"             # Not in database yet
+      - email_direction: "inbound"
+    min_score: 85                      # Must exceed fast_track threshold
+
+  # Meeting request = explicit intent
+  - name: "meeting_request"
+    description: "Lead explicitly requested a meeting/demo"
+    signals_required:
+      - requested_meeting
+      - requested_demo
+    min_score: 60
+
+# =============================================================================
+# LLM FALLBACK CONFIGURATION
+# Used when rules produce ambiguous score (40-69 range)
+# =============================================================================
+llm_fallback:
+  enabled: true
+  
+  # Score range where LLM is consulted
+  ambiguous_range:
+    min: 40
+    max: 69
+  
+  # Model to use (via langchain)
+  model: "gpt-4o-mini"
+  temperature: 0.1
+  max_tokens: 500
+  
+  # Prompt template for qualification decision
+  prompt_template: |
+    You are a lead qualification expert. Analyze this lead and their conversation
+    to determine if they should be promoted from staging to qualified leads.
+    
+    LEAD PROFILE:
+    {lead_profile}
+    
+    CONVERSATION HISTORY:
+    {conversation_history}
+    
+    EMAIL CLASSIFICATION:
+    {email_classification}
+    
+    CURRENT SCORE: {current_score}/100 (threshold: 70)
+    
+    Based on the context, should this lead be:
+    1. QUALIFIED (promote to leads table) - genuine buyer interest
+    2. NURTURE (keep in staging) - potential but needs more engagement
+    3. DISQUALIFIED (archive) - not a fit
+    
+    Respond with JSON:
+    {{
+      "decision": "qualified" | "nurture" | "disqualified",
+      "score_adjustment": -20 to +20,
+      "reasoning": "brief explanation",
+      "confidence": 0.0 to 1.0
+    }}
+
+# =============================================================================
+# DECISION MAKER TITLES (for target_title signal)
+# =============================================================================
+decision_maker_titles:
+  - "ceo"
+  - "cto"
+  - "cfo"
+  - "coo"
+  - "cmo"
+  - "cio"
+  - "cpo"
+  - "chief"
+  - "founder"
+  - "co-founder"
+  - "owner"
+  - "president"
+  - "vp"
+  - "vice president"
+  - "director"
+  - "head of"
+  - "partner"
+
+# =============================================================================
+# FREEMAIL DOMAINS (for known_domain signal)
+# =============================================================================
+freemail_domains:
+  - "gmail.com"
+  - "yahoo.com"
+  - "hotmail.com"
+  - "outlook.com"
+  - "aol.com"
+  - "icloud.com"
+  - "mail.com"
+  - "protonmail.com"
+  - "zoho.com"
+  - "yandex.com"
+
+# =============================================================================
+# KEYWORD PATTERNS (for conversation signal extraction)
+# =============================================================================
+keyword_patterns:
+  # Budget/pricing indicators
+  budget_keywords:
+    - "budget"
+    - "pricing"
+    - "cost"
+    - "price"
+    - "payment"
+    - "pay"
+    - "billing"
+    - "invoice"
+    - "quote"
+    - "proposal"
+    - "investment"
+    
+  # Timeline/urgency indicators
+  timeline_keywords:
+    - "timeline"
+    - "deadline"
+    - "asap"
+    - "urgent"
+    - "this week"
+    - "this month"
+    - "q1"
+    - "q2"
+    - "q3"
+    - "q4"
+    
+  # Meeting/demo request indicators
+  meeting_keywords:
+    - "meeting"
+    - "call"
+    - "demo"
+    - "presentation"
+    - "walkthrough"
+    - "schedule"
+    - "calendar"
+    - "availability"
+    - "let's chat"
+    - "let's talk"
+    
+  # Negative indicators
+  not_interested_keywords:
+    - "not interested"
+    - "no thanks"
+    - "unsubscribe"
+    - "remove me"
+    - "stop emailing"
+    - "wrong person"
+    - "not the right"
+    - "competitor"

@@ -1,0 +1,423 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: manager
+  namespace: agentic-system
+  labels:
+    app: manager
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: manager
+  template:
+    metadata:
+      labels:
+        app: manager
+        component: worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+        - name: manager
+          image: agentic/worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "tiers.tier_1.manager.consumer"]
+          env:
+            - name: REDIS_CONSUMER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: agentic-config
+            - secretRef:
+                name: agentic-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leads-orchestrator
+  namespace: agentic-system
+  labels:
+    app: leads-orchestrator
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: leads-orchestrator
+  template:
+    metadata:
+      labels:
+        app: leads-orchestrator
+        component: worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+        - name: leads-orchestrator
+          image: agentic/worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "tiers.tier_2.leads_orchestrator.consumer"]
+          env:
+            - name: REDIS_CONSUMER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: agentic-config
+            - secretRef:
+                name: agentic-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: outreach-orchestrator
+  namespace: agentic-system
+  labels:
+    app: outreach-orchestrator
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: outreach-orchestrator
+  template:
+    metadata:
+      labels:
+        app: outreach-orchestrator
+        component: worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+        - name: outreach-orchestrator
+          image: agentic/worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "tiers.tier_2.outreach_orchestrator.consumer"]
+          env:
+            - name: REDIS_CONSUMER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: agentic-config
+            - secretRef:
+                name: agentic-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-agent
+  namespace: agentic-system
+  labels:
+    app: rag-agent
+    component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rag-agent
+  template:
+    metadata:
+      labels:
+        app: rag-agent
+        component: worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+        - name: rag-agent
+          image: agentic/worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "tiers.tier_3.rag_agent.consumer"]
+          env:
+            - name: REDIS_CONSUMER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: agentic-config
+            - secretRef:
+                name: agentic-secrets
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: persistence-agent
+  namespace: agentic-system
+  labels:
+    app: persistence-agent
+    component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: persistence-agent
+  template:
+    metadata:
+      labels:
+        app: persistence-agent
+        component: worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+        - name: persistence-agent
+          image: agentic/worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "tiers.tier_3.persistence_agent.consumer"]
+          env:
+            - name: REDIS_CONSUMER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: agentic-config
+            - secretRef:
+                name: agentic-secrets
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: copywriter-agent
+  namespace: agentic-system
+  labels:
+    app: copywriter-agent
+    component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: copywriter-agent
+  template:
+    metadata:
+      labels:
+        app: copywriter-agent
+        component: worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+        - name: copywriter-agent
+          image: agentic/worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "tiers.tier_3.copywriter_agent.consumer"]
+          env:
+            - name: REDIS_CONSUMER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: agentic-config
+            - secretRef:
+                name: agentic-secrets
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler-agent
+  namespace: agentic-system
+  labels:
+    app: scheduler-agent
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler-agent
+  template:
+    metadata:
+      labels:
+        app: scheduler-agent
+        component: worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+        - name: scheduler-agent
+          image: agentic/worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "tiers.tier_3.scheduler_agent.consumer"]
+          env:
+            - name: REDIS_CONSUMER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: agentic-config
+            - secretRef:
+                name: agentic-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: channel-sequencer-agent
+  namespace: agentic-system
+  labels:
+    app: channel-sequencer-agent
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: channel-sequencer-agent
+  template:
+    metadata:
+      labels:
+        app: channel-sequencer-agent
+        component: worker
+    spec:
+      serviceAccountName: agentic-worker
+      containers:
+        - name: channel-sequencer-agent
+          image: agentic/worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "tiers.tier_3.channel_sequencer_agent.consumer"]
+          env:
+            - name: REDIS_CONSUMER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: agentic-config
+            - secretRef:
+                name: agentic-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30

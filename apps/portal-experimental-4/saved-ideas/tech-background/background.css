@@ -1,0 +1,149 @@
+/* Saved idea: Smooth Technical Background + Parallax (Experimental-4)
+
+Drop these into your globals.css (or a module), then apply:
+- Left panel wrapper: className="tech-bg"
+- Overlay divs inside: <div className="tech-mesh" /> <div className="tech-lines" /> <div className="atmospheric-mist" />
+
+The background uses CSS vars --mx/--my (set by mousemove) to drive subtle parallax.
+*/
+
+.tech-bg {
+  --mx: 0;
+  --my: 0;
+  background:
+    radial-gradient(
+      900px 700px at calc(28% + (var(--mx) * 10%)) calc(22% + (var(--my) * 10%)),
+      rgba(52, 211, 153, 0.22) 0%,
+      rgba(52, 211, 153, 0.06) 40%,
+      transparent 70%
+    ),
+    radial-gradient(
+      800px 600px at calc(78% - (var(--mx) * 12%)) calc(58% + (var(--my) * 12%)),
+      rgba(59, 130, 246, 0.18) 0%,
+      rgba(59, 130, 246, 0.06) 45%,
+      transparent 75%
+    ),
+    radial-gradient(
+      700px 520px at calc(45% + (var(--mx) * 8%)) calc(85% - (var(--my) * 8%)),
+      rgba(255, 255, 255, 0.08) 0%,
+      transparent 60%
+    ),
+    linear-gradient(180deg, hsl(220 35% 14%) 0%, hsl(220 40% 10%) 55%, hsl(220 45% 8%) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.tech-bg::before {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  background: conic-gradient(
+    from 220deg at 50% 50%,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.05) 40deg,
+    transparent 95deg,
+    rgba(52, 211, 153, 0.06) 160deg,
+    transparent 220deg,
+    rgba(59, 130, 246, 0.05) 300deg,
+    transparent 360deg
+  );
+  filter: blur(50px);
+  opacity: 0.55;
+  animation: tech-sheen 28s linear infinite;
+  pointer-events: none;
+}
+
+.tech-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2.4' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  opacity: 0.55;
+  mix-blend-mode: overlay;
+}
+
+@keyframes tech-sheen {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.tech-mesh {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at calc(20% + (var(--mx) * 10%)) calc(35% + (var(--my) * 10%)), rgba(52, 211, 153, 0.14), transparent 50%),
+    radial-gradient(circle at calc(75% - (var(--mx) * 10%)) calc(30% + (var(--my) * 10%)), rgba(59, 130, 246, 0.12), transparent 55%),
+    radial-gradient(circle at calc(55% + (var(--mx) * 8%)) calc(75% - (var(--my) * 8%)), rgba(255, 255, 255, 0.08), transparent 60%);
+  filter: blur(10px);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.tech-lines {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 600'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.18' stroke-width='1'%3E%3Cpath d='M-40 140 C 120 70 240 210 420 130 S 700 170 680 80'/%3E%3Cpath d='M-40 320 C 120 250 240 390 420 310 S 700 350 680 260'/%3E%3Cpath d='M-40 500 C 120 420 240 560 420 470 S 700 520 680 430'/%3E%3C/g%3E%3Cg fill='%2334d399' fill-opacity='0.55'%3E%3Ccircle cx='120' cy='120' r='2'/%3E%3Ccircle cx='240' cy='210' r='2'/%3E%3Ccircle cx='420' cy='130' r='2'/%3E%3Ccircle cx='240' cy='390' r='2'/%3E%3Ccircle cx='420' cy='310' r='2'/%3E%3Ccircle cx='240' cy='560' r='2'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 600px 600px;
+  background-repeat: repeat;
+  opacity: 0.6;
+  mix-blend-mode: overlay;
+  mask-image: radial-gradient(circle at 50% 60%, black 0%, transparent 75%);
+  -webkit-mask-image: radial-gradient(circle at 50% 60%, black 0%, transparent 75%);
+  animation: tech-lines-drift 22s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes tech-lines-drift {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: -600px 300px;
+  }
+}
+
+.atmospheric-mist {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 70% 30%, rgba(255,255,255,0.07), transparent),
+    radial-gradient(circle at 30% 60%, rgba(52,211,153,0.05), transparent 60%);
+  animation: mist-drift 25s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes mist-drift {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: 0.7;
+  }
+  25% {
+    transform: translate(-2%, 1%);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate(0, -1%);
+    opacity: 1;
+  }
+  75% {
+    transform: translate(2%, 0.5%);
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tech-bg::before {
+    animation: none;
+  }
+  .tech-lines {
+    animation: none;
+  }
+  .atmospheric-mist {
+    animation: none;
+  }
+}

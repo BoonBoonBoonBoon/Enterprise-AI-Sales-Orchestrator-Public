@@ -1,0 +1,196 @@
+namespace: agentic-system
+
+images:
+  worker: agentic/worker:latest
+  apiGateway: agentic/api-gateway:latest
+  portal: agentic/portal:latest
+
+config:
+  OPS_HB_ENABLED: "1"
+  OPS_HB_TTL: "30"
+  OPS_HB_INTERVAL: "10"
+  REDIS_STREAM_MAXLEN: "20000"
+  ENABLE_DLQ: "1"
+  REDIS_MAX_RETRIES: "2"
+  REDIS_RETRY_BACKOFF_MS: "0"
+  REDIS_NAMESPACE: "agentic-prod"
+  REDIS_GROUP_WRITERS: "persist-writers"
+  REDIS_GROUP_WORKERS: "rag-workers"
+  REDIS_STREAM_TASKS: "rag:tasks"
+  REDIS_STREAM_RESULTS: "rag:results"
+  REDIS_STREAM_TASKS_WRITE: "persist:tasks"
+  REDIS_STREAM_RESULTS_WRITE: "persist:results"
+  REDIS_STREAM_DLQ: "rag:dlq"
+  REDIS_STREAM_DLQ_WRITE: "persist:dlq"
+  PERSIST_KIND: "supabase"
+  WORKER_ONCE: "0"
+  REDIS_DEBUG: "0"
+  TENANT_ID: "agentic-prod"
+  LLM_PROVIDER: "openai"
+  ENABLE_LEAD_CONTEXT_ENRICHMENT: "1"
+
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  DEBUG: "0"
+  DEV_LOGIN_ENABLED: "0"
+  CORS_ORIGINS: "https://app.example.com"
+  RATE_LIMIT_REQUESTS: "100"
+  RATE_LIMIT_WINDOW_SECONDS: "60"
+
+  NEXT_PUBLIC_SUPABASE_URL: "https://your-project.supabase.co"
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "REPLACE_ME"
+  NEXT_PUBLIC_API_URL: "https://app.example.com/api"
+
+secrets:
+  provider: aws # aws | azure
+  aws:
+    region: us-east-1
+    secretName: agentic-system/prod
+  azure:
+    keyVaultName: agentic-system-prod
+    tenantId: ""
+    clientId: ""
+
+workers:
+  - name: manager
+    command: ["python", "-m", "tiers.tier_1.manager.consumer"]
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+  - name: leads-orchestrator
+    command: ["python", "-m", "tiers.tier_2.leads_orchestrator.consumer"]
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+  - name: outreach-orchestrator
+    command: ["python", "-m", "tiers.tier_2.outreach_orchestrator.consumer"]
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+  - name: rag-agent
+    command: ["python", "-m", "tiers.tier_3.rag_agent.consumer"]
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+  - name: persistence-agent
+    command: ["python", "-m", "tiers.tier_3.persistence_agent.consumer"]
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+  - name: copywriter-agent
+    command: ["python", "-m", "tiers.tier_3.copywriter_agent.consumer"]
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+  - name: scheduler-agent
+    command: ["python", "-m", "tiers.tier_3.scheduler_agent.consumer"]
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+  - name: channel-sequencer-agent
+    command: ["python", "-m", "tiers.tier_3.channel_sequencer_agent.consumer"]
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+
+apiGateway:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+portal:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+healthServer:
+  enabled: true
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+ingress:
+  enabled: true
+  className: nginx
+  host: app.example.com
+  tlsSecretName: agentic-tls
+  clusterIssuer: letsencrypt-prod
+
+hpa:
+  enabled: true
+  apiGateway:
+    minReplicas: 2
+    maxReplicas: 6
+    averageCpuUtilization: 70
+  portal:
+    minReplicas: 2
+    maxReplicas: 6
+    averageCpuUtilization: 70
+  ragAgent:
+    minReplicas: 2
+    maxReplicas: 10
+    averageCpuUtilization: 70
+  copywriterAgent:
+    minReplicas: 2
+    maxReplicas: 10
+    averageCpuUtilization: 70
+  persistenceAgent:
+    minReplicas: 2
+    maxReplicas: 10
+    averageCpuUtilization: 70
