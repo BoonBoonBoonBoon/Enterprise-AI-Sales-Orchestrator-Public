@@ -12,8 +12,8 @@ exclude_docs: |
   archive/**
 
 # Repository
-repo_name: BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
-repo_url: https://github.com/BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
+repo_name: BoonBoonBoonBoon/Agentic-System
+repo_url: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
 
 # Theme
 theme:
