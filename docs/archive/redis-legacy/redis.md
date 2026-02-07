@@ -23,6 +23,7 @@ Complete reference for Redis infrastructure, streams, and operational procedures
 ## Overview
 
 Redis Streams is the core messaging backbone for the Agentic System, enabling:
+
 - **Asynchronous task delegation** between tiers (Manager → Orchestrators → Agents)
 - **At-least-once delivery semantics** with consumer groups
 - **Horizontal scaling** through load-balanced message distribution
@@ -44,20 +45,23 @@ Redis Streams is the core messaging backbone for the Agentic System, enabling:
 ### Connection Details
 
 **Current Deployment:**
-- **Host:** `redis-15143.c335.europe-west2-1.gce.redns.redis-cloud.com`
+
+- **Host:** `rectred-for-security`
 - **Port:** `15143`
 - **Version:** `8.0.2`
 - **Protocol:** Non-TLS (`redis://`)
 - **Authentication:** Password-based
 
 **Environment Configuration:**
+
 ```bash
 # .env
-REDIS_URL=redis://default:6uf8I8lWVFSSKbyAljWYcVhslgou9nDr@redis-15143.c335.europe-west2-1.gce.redns.redis-cloud.com:15143
-REDIS_NAMESPACE=agentic-dev
+REDIS_URL=retracted-for-security
+REDIS_NAMESPACE=redis-legacy
 ```
 
 **Connection String Format:**
+
 ```
 redis://[username]:[password]@[host]:[port]/[db]
 ```
@@ -69,6 +73,7 @@ All keys are prefixed with `REDIS_NAMESPACE` for environment isolation:
 **Key Pattern:** `{namespace}:{domain}:{key}`
 
 **Examples:**
+
 - Stream: `agentic-dev:rag:tasks`
 - Heartbeat: `agentic-dev:ops:hb:rag:worker-1`
 - Workflow state: `agentic-dev:workflow:state:correlation-123`
@@ -118,27 +123,27 @@ The system uses a three-tier architecture where each tier communicates via dedic
 
 #### ✅ Tier 1: Manager (External Entry Point)
 
-| Stream | Purpose | Consumer Group | Status |
-|--------|---------|----------------|--------|
-| `{tenant}:manager:tasks` | External requests | `manager-workers` | ✅ Active |
-| `{tenant}:manager:results` | Final results | N/A (XREAD only) | ✅ Active |
+| Stream                     | Purpose           | Consumer Group    | Status    |
+| -------------------------- | ----------------- | ----------------- | --------- |
+| `{tenant}:manager:tasks`   | External requests | `manager-workers` | ✅ Active |
+| `{tenant}:manager:results` | Final results     | N/A (XREAD only)  | ✅ Active |
 
 #### ✅ Tier 2: Orchestrators
 
-| Orchestrator | Task Stream | Result Stream | Consumer Group | Status |
-|-------------|-------------|---------------|----------------|--------|
-| **Leads** | `{tenant}:leads:tasks` | `{tenant}:leads:results` | `leads-workers` | ✅ Active |
+| Orchestrator | Task Stream               | Result Stream               | Consumer Group     | Status    |
+| ------------ | ------------------------- | --------------------------- | ------------------ | --------- |
+| **Leads**    | `{tenant}:leads:tasks`    | `{tenant}:leads:results`    | `leads-workers`    | ✅ Active |
 | **Outreach** | `{tenant}:outreach:tasks` | `{tenant}:outreach:results` | `outreach-workers` | ✅ Active |
 
 #### ✅ Tier 3: Operational Agents
 
-| Agent | Task Stream | Result Stream | Consumer Group | Status |
-|-------|-------------|---------------|----------------|--------|
-| **RAG** | `{tenant}:rag:tasks` | `{tenant}:rag:results` | `rag-workers` | ✅ Active |
-| **Copywriter** | `{tenant}:copywriter:tasks` | `{tenant}:copywriter:results` | `copywriter-workers` | ✅ Active |
-| **Persistence** | `{tenant}:persistence:tasks` | `{tenant}:persistence:results` | `persistence-workers` | ✅ Active |
-| **Booking** | `{tenant}:booking:tasks` | `{tenant}:booking:results` | `booking-workers` | ⏳ Referenced |
-| **Sequencing** | `{tenant}:sequencing:tasks` | `{tenant}:sequencing:results` | `sequencing-workers` | ⏳ Referenced |
+| Agent           | Task Stream                  | Result Stream                  | Consumer Group        | Status        |
+| --------------- | ---------------------------- | ------------------------------ | --------------------- | ------------- |
+| **RAG**         | `{tenant}:rag:tasks`         | `{tenant}:rag:results`         | `rag-workers`         | ✅ Active     |
+| **Copywriter**  | `{tenant}:copywriter:tasks`  | `{tenant}:copywriter:results`  | `copywriter-workers`  | ✅ Active     |
+| **Persistence** | `{tenant}:persistence:tasks` | `{tenant}:persistence:results` | `persistence-workers` | ✅ Active     |
+| **Booking**     | `{tenant}:booking:tasks`     | `{tenant}:booking:results`     | `booking-workers`     | ⏳ Referenced |
+| **Sequencing**  | `{tenant}:sequencing:tasks`  | `{tenant}:sequencing:results`  | `sequencing-workers`  | ⏳ Referenced |
 
 ---
 
@@ -147,16 +152,19 @@ The system uses a three-tier architecture where each tier communicates via dedic
 **Pattern:** `{tenant_id}:{component}:{type}`
 
 **Components:**
+
 - `manager` - Manager Agent (Tier 1)
 - `leads`, `outreach` - Orchestrators (Tier 2)
 - `rag`, `copywriter`, `persistence`, `booking`, `sequencing`, `deduplication` - Agents (Tier 3)
 
 **Types:**
+
 - `tasks` - Incoming task stream (consumers read via XREADGROUP)
 - `results` - Result stream (consumers publish via XADD)
 - `dlq` - Dead Letter Queue for failed messages
 
 **Examples:**
+
 ```
 agentic-dev:manager:tasks
 agentic-dev:leads:tasks
@@ -179,12 +187,14 @@ Stream: agentic-dev:leads:tasks
 ```
 
 **Benefits:**
+
 - Multiple workers process tasks in parallel
 - Each message delivered to only ONE worker in group
 - Automatic load balancing by Redis
 - Failure recovery via pending entries list
 
 **Consumer Group Names:**
+
 - `manager-workers` - Manager consumers
 - `leads-workers` - Leads Orchestrator consumers
 - `outreach-workers` - Outreach Orchestrator consumers
@@ -262,6 +272,7 @@ Failed messages are retried with exponential backoff:
 4. If max retries exceeded → Send to DLQ (if `ENABLE_DLQ=1`)
 
 **Configuration:**
+
 ```bash
 REDIS_MAX_RETRIES=2
 REDIS_RETRY_BACKOFF_MS=0
@@ -269,6 +280,7 @@ ENABLE_DLQ=1
 ```
 
 **DLQ Streams:**
+
 - `rag:dlq`, `persist:dlq`, `copy:dlq`
 
 ### Stream Trimming
@@ -392,6 +404,7 @@ TTL agentic-dev:ops:hb:rag:worker-1
 **Problem:** `ConnectionError: Error connecting to Redis`
 
 **Solutions:**
+
 1. Verify `REDIS_URL` in `.env` matches Redis Cloud instance
 2. Check firewall/network access
 3. Validate password authentication
@@ -407,6 +420,7 @@ python scripts/check_namespace.py
 **Problem:** Tasks enqueued but workers not processing
 
 **Solution:** Ensure all scripts load `.env` before importing:
+
 ```python
 from dotenv import load_dotenv
 load_dotenv()  # Call BEFORE importing config modules
@@ -417,6 +431,7 @@ load_dotenv()  # Call BEFORE importing config modules
 **Problem:** High pending count, workers active but not processing
 
 **Solutions:**
+
 ```bash
 # Identify stuck messages
 XPENDING agentic-dev:rag:tasks rag-workers
@@ -431,6 +446,7 @@ XACK agentic-dev:rag:tasks rag-workers <message-id>
 ### DLQ Growth
 
 **Investigation:**
+
 ```bash
 # Sample DLQ entries
 python scripts/check_rag_tasks.py
@@ -440,6 +456,7 @@ python scripts/check_audit.py
 ```
 
 **Common Causes:**
+
 - Invalid lead data (missing fields)
 - Database constraint violations
 - LLM API rate limits
