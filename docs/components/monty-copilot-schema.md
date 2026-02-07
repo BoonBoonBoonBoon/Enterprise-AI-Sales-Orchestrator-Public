@@ -2,11 +2,13 @@
 
 This document describes the database tables and relationships for the Monty Copilot feature.
 
+For a higher-level backend overview (how users/clients/leads connect to conversations/messages, and how the API writes data), see `Monty Copilot Backend` in the Components docs.
+
 ## Tables Overview
 
 ```
 ┌─────────────────────────────────┐      ┌────────────────────────────────┐
-│   monty_chat_conversations      │      │          monty_chats           │
+│   monty_chat_conversations      │      │      monty_chat_messages       │
 │   (Conversation Sessions)       │◄─────│      (Individual Messages)     │
 ├─────────────────────────────────┤      ├────────────────────────────────┤
 │ id (PK)                         │      │ id (PK)                        │
@@ -69,23 +71,26 @@ Groups individual messages into conversation sessions. Each conversation is:
 | `updated_at`                  | TIMESTAMPTZ | Last activity timestamp                     |
 | `ended_at`                    | TIMESTAMPTZ | When conversation was closed                |
 
-### `monty_chats`
+### `monty_chat_messages`
 
 Individual messages exchanged between user and AI.
+
+Note: `monty_chats` is the legacy message table used before `monty_chat_messages` existed. The portal API now writes to `monty_chat_messages`.
 
 | Column            | Type        | Description                        |
 | ----------------- | ----------- | ---------------------------------- |
 | `id`              | UUID        | Primary key                        |
+| `conversation_id` | UUID        | FK to monty_chat_conversations     |
 | `user_id`         | UUID        | FK to auth.users                   |
 | `client_id`       | UUID        | FK to clients                      |
 | `lead_id`         | UUID        | Reference to lead                  |
 | `lead_source`     | TEXT        | 'leads' or 'staging_leads'         |
-| `conversation_id` | UUID        | FK to monty_chat_conversations     |
 | `role`            | ENUM        | 'user', 'assistant', or 'system'   |
 | `content`         | TEXT        | Message text (max 32,000 chars)    |
 | `model`           | TEXT        | AI model used (e.g., 'gpt-4o')     |
 | `tokens_used`     | INT         | Token consumption for this message |
 | `context_summary` | TEXT        | Summary of lead context provided   |
+| `metadata`        | JSONB       | Flexible metadata                  |
 | `created_at`      | TIMESTAMPTZ | When message was sent              |
 
 ### `monty_rate_limits`
@@ -117,7 +122,21 @@ Returns all columns from `monty_chat_conversations` plus:
 - `user_email` - Email of the team member
 - `first_message_preview` - First message content for preview
 
+Implementation note: `first_message_preview` now prefers `monty_chat_messages` and falls back to legacy `monty_chats`.
+
 ## Triggers
+
+### Current (messages table) triggers
+
+These triggers live on `monty_chat_messages` and keep `monty_chat_conversations` in sync.
+
+- `trg_monty_assert_message_scope_matches_conversation` — prevents inserting a message whose `(user_id, client_id, lead_id, lead_source)` does not match the parent conversation.
+- `trg_monty_update_conversation_stats_after_message_ins` / `trg_monty_update_conversation_stats_after_message_del` — updates `monty_chat_conversations.message_count` and `updated_at`.
+- `trg_monty_auto_title_conversation_from_first_user_message` — sets `monty_chat_conversations.title` from the first user message.
+
+### Legacy (`monty_chats`) triggers
+
+These triggers exist for the legacy `monty_chats` table and are primarily relevant for backfilled/older data:
 
 ### `trigger_update_monty_message_count`
 
@@ -137,7 +156,9 @@ All tables have RLS enabled with policies ensuring:
 
 - Users can only access their own chat data
 - Service role has full access for API operations
-- Multi-tenant isolation via client_id
+- Multi-tenant isolation via `client_id`
+
+Hardening note: the RLS hardening migration tightens access so reads/inserts require both `auth.uid() = user_id` and a valid membership row in `user_client_memberships` for the conversation/message `client_id`.
 
 ## Example Queries
 
@@ -152,8 +173,8 @@ RETURNING id;
 ### Add a message
 
 ```sql
-INSERT INTO monty_chats (user_id, client_id, lead_id, lead_source, conversation_id, role, content, model)
-VALUES ('user-uuid', 'client-uuid', 'lead-uuid', 'leads', 'conv-uuid', 'user', 'Hello!', 'gpt-4o');
+INSERT INTO monty_chat_messages (conversation_id, user_id, client_id, lead_id, lead_source, role, content, model)
+VALUES ('conv-uuid', 'user-uuid', 'client-uuid', 'lead-uuid', 'leads', 'user'::monty_message_role, 'Hello!', 'gpt-4o');
 ```
 
 ### Get conversation history for a lead
@@ -167,7 +188,7 @@ ORDER BY updated_at DESC;
 ### Get messages in a conversation
 
 ```sql
-SELECT role, content, created_at FROM monty_chats
+SELECT role, content, created_at FROM monty_chat_messages
 WHERE conversation_id = 'conv-uuid'
 ORDER BY created_at ASC;
 ```
@@ -182,6 +203,9 @@ WHERE id = 'conv-uuid';
 
 ## Migration Files
 
-1. `20260204150000_monty_chats_table.sql` - Base messages table
+1. `20260204150000_monty_chats_table.sql` - Legacy messages table
 2. `20260204153000_monty_chat_conversations.sql` - Conversation sessions
 3. `20260205100000_monty_copilot_enhancements.sql` - Enhanced fields, triggers, view
+4. `20260206120000_monty_chat_messages_table.sql` - Dedicated messages table
+5. `20260206130000_monty_single_open_conversation.sql` - Single-open conversation constraint
+6. `20260206131000_monty_copilot_rls_hardening.sql` - RLS hardening (runs after messages table)

@@ -22,7 +22,7 @@ cp .env.example .env
 
 # Edit .env with your credentials
 # SECRETS_PROVIDER=env (default)
-# OPENAI_API_KEY=your-openai-api-key
+# OPENAI_API_KEY=sk-...
 # REDIS_URL=redis://...
 ```
 
@@ -56,7 +56,7 @@ az keyvault create \
 
 ```bash
 # Azure Key Vault uses hyphens instead of underscores
-az keyvault secret set --vault-name agentic-system-prod --name OPENAI-API-KEY --value "your-openai-api-key"
+az keyvault secret set --vault-name agentic-system-prod --name OPENAI-API-KEY --value "sk-..."
 az keyvault secret set --vault-name agentic-system-prod --name REDIS-URL --value "redis://..."
 az keyvault secret set --vault-name agentic-system-prod --name SUPABASE-URL --value "https://..."
 az keyvault secret set --vault-name agentic-system-prod --name SUPABASE-KEY --value "eyJ..."

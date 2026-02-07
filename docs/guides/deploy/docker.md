@@ -157,9 +157,9 @@ Create `.env` file:
 ```bash
 # .env
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_JWT_SECRET=your-jwt-secret
-OPENAI_API_KEY=your-openai-api-key
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_JWT_SECRET=your-secret
+OPENAI_API_KEY=sk-...
 TENANT_ID=agentic-dev
 ```
 

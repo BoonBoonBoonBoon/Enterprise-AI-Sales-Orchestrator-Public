@@ -3,7 +3,6 @@ Optimizing tool selection...## Simple Guide: How Agents Connect to Supabase
 ### The Problem We're Solving
 
 Your agents (RAG, Persistence) need to talk to your Supabase database. But you need:
-
 1. **Security** - Not everyone should access your database
 2. **Permissions** - RAG should only READ, Persistence should WRITE
 3. **Auditing** - Know who did what
@@ -14,13 +13,13 @@ Your agents (RAG, Persistence) need to talk to your Supabase database. But you n
 
 Think of Supabase as a **hotel** with rooms (your database tables).
 
-| Concept                            | Hotel Analogy                         |
-| ---------------------------------- | ------------------------------------- |
-| **Supabase**                       | The hotel building                    |
-| **Tables** (leads, messages, etc.) | Rooms in the hotel                    |
-| **JWT Token**                      | A key card                            |
-| **Role** (reader/writer)           | Key card permissions (guest vs staff) |
-| **Edge Function**                  | The front desk that issues key cards  |
+| Concept | Hotel Analogy |
+|---------|---------------|
+| **Supabase** | The hotel building |
+| **Tables** (leads, messages, etc.) | Rooms in the hotel |
+| **JWT Token** | A key card |
+| **Role** (reader/writer) | Key card permissions (guest vs staff) |
+| **Edge Function** | The front desk that issues key cards |
 
 ---
 
@@ -79,17 +78,16 @@ Think of Supabase as a **hotel** with rooms (your database tables).
 A JWT is just a **signed string** with information inside:
 
 ```
-<JWT_HEADER>.<JWT_PAYLOAD>.<JWT_SIGNATURE>
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyYWctYWdlbnQiLCJyb2xlIjoicmVhZGVyIn0.signature
 └──────── Header ────────┘ └────────── Payload ──────────┘ └─ Signature ─┘
 ```
 
 **Decoded payload:**
-
 ```json
 {
-  "sub": "rag-agent-service", // Who is this?
-  "user_role": "agent_reader", // What can they do?
-  "iat": 1733011200 // When was this issued?
+  "sub": "rag-agent-service",    // Who is this?
+  "user_role": "agent_reader",   // What can they do?
+  "iat": 1733011200              // When was this issued?
 }
 ```
 
@@ -102,24 +100,22 @@ The **signature** proves the token wasn't tampered with (like a hologram on an I
 An **Edge Function** is just code that runs on Supabase's servers.
 
 **Why use it?**
-
 - It has access to `SUPABASE_SERVICE_ROLE_KEY` (the master key)
 - The master key can create new JWT tokens
 - You call it once to get your agent tokens
 
 **You already did this:**
-
 ```powershell
-$response = Invoke-RestMethod -Uri "https://your-project.supabase.co/functions/v1/generate-agent-jwts"
+$response = Invoke-RestMethod -Uri "https://ekjjqcsruwltpqkbimjo.supabase.co/functions/v1/generate-agent-jwts"
 ```
 
 ---
 
 ### The Two Tokens You Got
 
-| Token                       | Identity          | Role           | Can Do                         |
-| --------------------------- | ----------------- | -------------- | ------------------------------ |
-| `rag-agent-service`         | RAG Agent         | `agent_reader` | SELECT (read)                  |
+| Token | Identity | Role | Can Do |
+|-------|----------|------|--------|
+| `rag-agent-service` | RAG Agent | `agent_reader` | SELECT (read) |
 | `persistence-agent-service` | Persistence Agent | `agent_writer` | SELECT, INSERT, UPDATE, DELETE |
 
 ---
@@ -127,19 +123,17 @@ $response = Invoke-RestMethod -Uri "https://your-project.supabase.co/functions/v
 ### How Agents Use the Tokens
 
 **Before (what you had):**
-
 ```python
 # Both agents used the same key
 supabase = SupabaseAdapter(url, os.getenv("SUPABASE_KEY"))
 ```
 
 **After (what you'll have):**
-
 ```python
 # RAG Agent - READ ONLY token
 supabase = SupabaseAdapter(url, os.getenv("SUPABASE_RAG_JWT"))
 
-# Persistence Agent - WRITE token
+# Persistence Agent - WRITE token  
 supabase = SupabaseAdapter(url, os.getenv("SUPABASE_PERSISTENCE_JWT"))
 ```
 

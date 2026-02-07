@@ -15,10 +15,10 @@ This guide covers integrating LLMs (Large Language Models) into agents and orche
 
 ```bash
 # OpenAI
-OPENAI_API_KEY=your-openai-api-key
+OPENAI_API_KEY=sk-your-key-here
 
 # Anthropic (alternative)
-ANTHROPIC_API_KEY=your-anthropic-api-key
+ANTHROPIC_API_KEY=sk-ant-your-key-here
 
 # Provider selection
 LLM_PROVIDER=openai

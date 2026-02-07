@@ -11,7 +11,6 @@
 This plan outlines a 4-week implementation roadmap to deliver a functional SDR automation system. The system will handle the complete SDR workflow: discovering leads, qualifying them, enriching with company data, executing multi-channel outreach campaigns, monitoring replies, booking meetings, and handing off to Account Executives.
 
 **Current State:**
-
 - ✅ Redis hierarchical architecture implemented and tested
 - ✅ Manager + 2 Orchestrators + 3 Agents operational
 - ✅ Database schema complete (27 fields in `leads` table)
@@ -33,12 +32,10 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 **Current Issue:** RAG agent returns `enriched_fields: ["messages"]` only, no company data.
 
 **Root Cause:** Missing environment variables:
-
 - `CRUNCHBASE_API_KEY` - Company data (funding, size, industry)
 - `LINKEDIN_ACCESS_TOKEN` or Proxycurl key - Professional data
 
 **Action Items:**
-
 1. **Crunchbase Setup:**
    - Sign up at https://www.crunchbase.com/api
    - Get API key from dashboard
@@ -49,6 +46,7 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
      - Sign up at https://nubela.co/proxycurl/
      - Get API key
      - Add to `.env`: `PROXYCURL_API_KEY=your_key_here`
+   
    - **Option B - LinkedIn Official API**:
      - Requires OAuth flow and app approval
      - Add to `.env`: `LINKEDIN_ACCESS_TOKEN=your_token_here`
@@ -59,7 +57,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
    ```
 
 **Files to Update:**
-
 - `.env` - Add API keys
 - `tiers/tier_3/rag_agent/rag_agent.py` - Verify API integration code (lines 150-200)
 
@@ -70,15 +67,12 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 **File:** `tiers/tier_3/copywriter_agent/copywriter.py`
 
 **Action Items:**
-
 1. Import OpenAI SDK (already in dependencies):
-
    ```python
    from openai import AsyncOpenAI
    ```
 
 2. Replace `_call_llm()` stub (around line 85):
-
    ```python
    async def _call_llm(self, prompt: str, model: str = "gpt-4") -> str:
        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -100,15 +94,12 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 ### 0.3 Restart Consumers & Test (1 hour)
 
 **Action Items:**
-
 1. Restart all consumers with new code:
-
    ```powershell
    .\restart_consumers.ps1
    ```
 
 2. Run E2E test with enrichment verification:
-
    ```powershell
    python fresh_test.py
    ```
@@ -119,7 +110,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
    - Check logs: RAG agent should log successful API calls to Crunchbase/LinkedIn
 
 **Success Criteria:**
-
 - ✅ RAG agent returns `enriched_fields: ["company_name", "industry", "employee_count", "funding_stage", ...]`
 - ✅ Supabase `leads.raw_data` contains JSON with external API responses
 - ✅ No errors in consumer logs about missing API keys
@@ -137,7 +127,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 **Options (Choose One for MVP):**
 
 **Option A - Apollo.io** (Recommended):
-
 - **Pros:** Large B2B database, good filters, reasonable pricing
 - **Cons:** Requires paid plan for API access
 - **Implementation:**
@@ -157,7 +146,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
   5. Script delegates to Manager: "Find and qualify 50 new leads in {industry}"
 
 **Option B - Manual CSV Upload** (Fastest MVP):
-
 - **Pros:** No API integration needed, immediate testing
 - **Cons:** Not fully automated
 - **Implementation:**
@@ -167,7 +155,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
   4. Trigger Manager with "Process staging leads" task
 
 **Option C - LinkedIn Sales Navigator Scraper**:
-
 - **Pros:** Access to LinkedIn data directly
 - **Cons:** Against ToS, account risk, requires Selenium
 - **Recommendation:** Avoid for production, use Proxycurl instead
@@ -181,9 +168,7 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 **File:** `tiers/tier_3/rag_agent/rag_agent.py`
 
 **Action Items:**
-
 1. Define qualification criteria in `config/qualification_rules.py`:
-
    ```python
    QUALIFICATION_RULES = {
        "company_size": {"min": 50, "max": 5000},  # Employee count
@@ -206,7 +191,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
    - `disqualification_reason`: String (if disqualified)
 
 **Success Criteria:**
-
 - ✅ Only leads with `lead_score >= 70` marked as "qualified"
 - ✅ Disqualified leads have clear reason logged
 - ✅ Qualification rules configurable without code changes
@@ -218,9 +202,7 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 **Why Needed:** Prevent duplicate outreach to same person/company.
 
 **Action Items:**
-
 1. Create `tiers/tier_3/deduplication_agent/` directory structure:
-
    ```
    deduplication_agent/
    ├── __init__.py
@@ -230,7 +212,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
    ```
 
 2. Implement deduplication logic (`deduplication.py`):
-
    ```python
    class DeduplicationAgent:
        async def check_duplicate(self, lead: dict) -> dict:
@@ -253,7 +234,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
    - **Same person, different company:** Update company, continue
 
 **Success Criteria:**
-
 - ✅ No duplicate emails in `leads` table
 - ✅ Deduplication agent handles 1000+ leads/hour
 - ✅ Merged duplicates preserve most recent enriched data
@@ -263,14 +243,12 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 **Test Scenario:** CSV Upload → Staging → Enrichment → Qualification → Deduplication → Supabase
 
 **Action Items:**
-
 1. Create test CSV with 10 leads:
    - 5 qualified (good company size, funding, title)
    - 3 disqualified (small company, wrong title)
    - 2 duplicates (same email as existing leads)
 
 2. Run import script:
-
    ```powershell
    python -m scripts.import_leads_from_csv --file test_leads.csv
    ```
@@ -281,13 +259,12 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 
 4. Verify Supabase results:
    ```sql
-   SELECT email, qualification_status, lead_score, enrichment_status
-   FROM leads
+   SELECT email, qualification_status, lead_score, enrichment_status 
+   FROM leads 
    WHERE created_at > NOW() - INTERVAL '1 hour';
    ```
 
 **Expected Results:**
-
 - 5 leads: `qualification_status = "qualified"`, `enrichment_status = "complete"`
 - 3 leads: `qualification_status = "disqualified"`
 - 2 leads: Skipped (duplicate detection)
@@ -305,7 +282,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 **Options (Choose One for MVP):**
 
 **Option A - SendGrid** (Recommended):
-
 - **Pros:** 100 emails/day free, good deliverability, simple API
 - **Cons:** Requires domain verification for production
 - **Implementation:**
@@ -313,11 +289,10 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
   2. Get API key
   3. Add to `.env`: `SENDGRID_API_KEY=your_key_here`
   4. Create `services/external_apis/email_sender.py`:
-
      ```python
      from sendgrid import SendGridAPIClient
      from sendgrid.helpers.mail import Mail
-
+     
      class EmailSender:
          def send_email(self, to: str, subject: str, body: str, from_email: str):
              message = Mail(
@@ -332,19 +307,16 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
      ```
 
 **Option B - Postmark**:
-
 - **Pros:** Excellent deliverability, transactional focus
 - **Cons:** No free tier (pay per email)
 
 **Option C - AWS SES**:
-
 - **Pros:** Very cheap at scale
 - **Cons:** Sandbox requires approval, complex setup
 
 **Decision Point:** Choose email service by Week 2 Day 1.
 
 **Domain Setup (Required for Production):**
-
 1. Add SPF record: `v=spf1 include:sendgrid.net ~all`
 2. Add DKIM records (from SendGrid dashboard)
 3. Add DMARC record: `v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com`
@@ -357,9 +329,7 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
 **File:** `tiers/tier_2/outreach_orchestrator/consumer.py`
 
 **Action Items:**
-
 1. Start Outreach consumer:
-
    ```powershell
    # Terminal 3 - Outreach Orchestrator
    $env:TENANT_ID = 'agentic-dev'
@@ -367,11 +337,10 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
    ```
 
 2. Test Manager → Outreach delegation:
-
    ```python
    # In Python shell or test script
    from tiers.tier_1.manager.tools.delegation_tools import delegate_to_outreach_orchestrator
-
+   
    task = {
        "action": "create_email_campaign",
        "lead_ids": [1, 2, 3],
@@ -389,7 +358,6 @@ This plan outlines a 4-week implementation roadmap to deliver a functional SDR a
    - Log sent emails to `outreach_log` table (create if needed)
 
 **Database Schema for `outreach_log` table:**
-
 ```sql
 CREATE TABLE outreach_log (
   id SERIAL PRIMARY KEY,
@@ -411,9 +379,7 @@ CREATE TABLE outreach_log (
 **Workflow:** Email (Day 0) → LinkedIn (Day 3) → Phone (Day 7) → Follow-up (Day 10)
 
 **Action Items:**
-
 1. Create `config/outreach_sequences.py`:
-
    ```python
    DEFAULT_SEQUENCE = [
        {"day": 0, "channel": "email", "template": "initial_intro"},
@@ -447,7 +413,6 @@ CREATE TABLE outreach_log (
 **Goal:** Track outreach campaigns, metrics, and performance.
 
 **Database Schema for `campaigns` table:**
-
 ```sql
 CREATE TABLE campaigns (
   id SERIAL PRIMARY KEY,
@@ -465,9 +430,7 @@ CREATE TABLE campaigns (
 ```
 
 **Action Items:**
-
 1. Create campaign before outreach:
-
    ```python
    campaign = {
        "name": "Q4 SaaS Outreach",
@@ -505,16 +468,14 @@ CREATE TABLE campaigns (
 **Approach:** Use SendGrid/Postmark webhooks to notify when replies received.
 
 **Action Items:**
-
 1. Create webhook endpoint:
    - **File:** `api/webhooks/email_reply.py`
    - **Framework:** Flask or FastAPI (lightweight)
-
    ```python
    from fastapi import FastAPI, Request
-
+   
    app = FastAPI()
-
+   
    @app.post("/webhooks/sendgrid/reply")
    async def handle_email_reply(request: Request):
        data = await request.json()
@@ -546,12 +507,10 @@ CREATE TABLE campaigns (
 **Goal:** Classify replies as positive (interested), negative (not interested), or neutral (question/objection).
 
 **Action Items:**
-
 1. Create `services/sentiment_analyzer.py`:
-
    ```python
    from openai import OpenAI
-
+   
    class SentimentAnalyzer:
        def analyze_reply(self, email_body: str) -> dict:
            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -560,9 +519,9 @@ CREATE TABLE campaigns (
            - "positive": Interested, wants meeting/demo/more info
            - "negative": Not interested, unsubscribe, wrong person
            - "neutral": Question, objection, need more info
-
+           
            Reply: {email_body}
-
+           
            Return JSON: {{"sentiment": "positive|negative|neutral", "reason": "brief explanation"}}
            """
            response = client.chat.completions.create(
@@ -577,7 +536,6 @@ CREATE TABLE campaigns (
    - Update `leads` table: `reply_sentiment`, `last_reply_at`
 
 3. Define next actions based on sentiment:
-
    ```python
    SENTIMENT_ACTIONS = {
        "positive": "trigger_booking_flow",
@@ -598,9 +556,7 @@ CREATE TABLE campaigns (
 **Goal:** Send calendar link, track booking status.
 
 **Action Items:**
-
 1. Create `tiers/tier_3/booking_agent/` directory structure:
-
    ```
    booking_agent/
    ├── __init__.py
@@ -614,15 +570,16 @@ CREATE TABLE campaigns (
      - Sign up at https://calendly.com
      - Get booking page URL: `https://calendly.com/your-name/30min`
      - No API needed, just include link in email
+   
    - **Option B - Cal.com** (Open-source):
      - Self-host or use cloud version
      - API integration for booking tracking
+   
    - **Option C - Google Calendar API**:
      - Full control, complex OAuth setup
      - Create events programmatically
 
 3. Implement booking flow (`booking.py`):
-
    ```python
    class BookingAgent:
        def send_booking_link(self, lead_email: str, calendly_url: str):
@@ -630,22 +587,21 @@ CREATE TABLE campaigns (
            subject = "Let's schedule a quick call"
            body = f"""
            Hi {lead_name},
-
+           
            Thanks for your interest! I'd love to chat about how we can help.
-
+           
            Book a time that works for you: {calendly_url}
-
+           
            Looking forward to it!
            """
            # Send via EmailSender
-
+           
        def track_booking(self, lead_id: int, event_data: dict):
            # Update leads table: booking_status = "confirmed"
            # Log to bookings table
    ```
 
 4. Create `bookings` table:
-
    ```sql
    CREATE TABLE bookings (
      id SERIAL PRIMARY KEY,
@@ -669,15 +625,12 @@ CREATE TABLE campaigns (
 **Goal:** Automatically respond to common questions/objections.
 
 **Use Cases:**
-
 - "What's the pricing?" → Send pricing page link
 - "Can you send more info?" → Send case studies PDF
 - "Not the right time" → Schedule follow-up in 3 months
 
 **Action Items:**
-
 1. Create response templates in `config/auto_responses.py`:
-
    ```python
    AUTO_RESPONSES = {
        "pricing_question": {
@@ -709,9 +662,7 @@ CREATE TABLE campaigns (
 ### 4.1 Define Handoff Criteria (2 hours)
 
 **Action Items:**
-
 1. Create `config/handoff_rules.py`:
-
    ```python
    HANDOFF_CRITERIA = {
        "lead_score": 80,  # Minimum qualification score
@@ -722,7 +673,6 @@ CREATE TABLE campaigns (
    ```
 
 2. Create handoff query:
-
    ```sql
    SELECT * FROM leads
    WHERE lead_score >= 80
@@ -744,7 +694,6 @@ CREATE TABLE campaigns (
 **Options (Choose One for MVP):**
 
 **Option A - HubSpot** (Recommended):
-
 - **Pros:** Free tier, good API, popular
 - **Cons:** Rate limits on free tier
 - **Implementation:**
@@ -752,10 +701,9 @@ CREATE TABLE campaigns (
   2. Get API key from Settings > Integrations
   3. Add to `.env`: `HUBSPOT_API_KEY=your_key_here`
   4. Create `services/external_apis/hubspot_client.py`:
-
      ```python
      import requests
-
+     
      class HubSpotClient:
          def create_contact(self, lead: dict) -> str:
              url = "https://api.hubapi.com/crm/v3/objects/contacts"
@@ -775,12 +723,10 @@ CREATE TABLE campaigns (
      ```
 
 **Option B - Salesforce**:
-
 - **Pros:** Enterprise standard, powerful
 - **Cons:** Expensive, complex setup
 
 **Option C - Pipedrive**:
-
 - **Pros:** Simple, sales-focused
 - **Cons:** Less integrations than HubSpot
 
@@ -789,25 +735,23 @@ CREATE TABLE campaigns (
 ### 4.3 Handoff Workflow (6 hours)
 
 **Action Items:**
-
 1. Create handoff script (`scripts/handoff_to_ae.py`):
-
    ```python
    def handoff_qualified_leads():
        # Query leads ready for handoff
        ready_leads = get_handoff_ready_leads()
-
+       
        for lead in ready_leads:
            # Create contact in HubSpot/Salesforce
            crm_contact_id = hubspot_client.create_contact(lead)
-
+           
            # Update leads table
            update_lead(lead["id"], {
                "handoff_status": "completed",
                "handoff_at": datetime.now(),
                "crm_contact_id": crm_contact_id
            })
-
+           
            # Notify AE
            send_slack_notification(
                channel="#sales-handoffs",
@@ -821,32 +765,31 @@ CREATE TABLE campaigns (
    - Add to `.env`: `SLACK_WEBHOOK_URL=your_url_here`
 
 3. Generate handoff report:
-
    ```python
    def generate_handoff_report(lead: dict) -> str:
        report = f"""
        🎯 New Qualified Lead Handoff
-
+       
        Contact: {lead['name']} ({lead['email']})
        Company: {lead['company']} ({lead['industry']}, {lead['employee_count']} employees)
        Title: {lead['title']}
        Lead Score: {lead['lead_score']}/100
-
+       
        Enrichment Data:
        - Funding: {lead['funding_stage']} (${lead['funding_amount']}M raised)
        - Tech Stack: {lead['technologies']}
        - Pain Points: {lead['identified_pain_points']}
-
+       
        Meeting Details:
        - Scheduled: {lead['booking_time']}
        - Duration: 30 minutes
        - Calendly Link: {lead['calendly_url']}
-
+       
        Outreach History:
        - First Contact: {lead['first_contact_date']}
        - Emails Sent: {lead['emails_sent']}
        - Last Reply: {lead['last_reply_at']} ("{lead['last_reply_preview']}")
-
+       
        Next Steps:
        1. Review enrichment data and outreach history
        2. Prepare for meeting using pain points identified
@@ -864,9 +807,7 @@ CREATE TABLE campaigns (
 **Goal:** Track AE outcomes to improve SDR system.
 
 **Action Items:**
-
 1. Add outcome tracking to `leads` table:
-
    ```sql
    ALTER TABLE leads
    ADD COLUMN ae_outcome VARCHAR(50), -- 'qualified_opp', 'not_qualified', 'no_show', 'demo_scheduled'
@@ -881,11 +822,10 @@ CREATE TABLE campaigns (
    - **Option C - CRM field:** Update directly in HubSpot
 
 3. Analyze feedback:
-
    ```python
    def analyze_lead_quality():
        query = """
-       SELECT
+       SELECT 
          AVG(lead_score) as avg_score,
          COUNT(*) FILTER (WHERE ae_outcome = 'qualified_opp') as qualified_count,
          COUNT(*) FILTER (WHERE ae_outcome = 'not_qualified') as not_qualified_count,
@@ -907,28 +847,24 @@ CREATE TABLE campaigns (
 ## Success Metrics
 
 ### Week 1 (Core Pipeline):
-
 - ✅ 100% of new leads enriched within 5 minutes
 - ✅ 0% duplicate leads in database
 - ✅ 80%+ qualification accuracy (manual review of sample)
 - ✅ RAG agent returns 10+ enriched fields per lead
 
 ### Week 2 (Outreach):
-
 - ✅ 100 emails sent per day
 - ✅ 40%+ open rate
 - ✅ 10%+ reply rate
 - ✅ Copywriter generates unique email for each lead (no generic templates)
 
 ### Week 3 (Inbound):
-
 - ✅ 100% of replies detected within 5 minutes
 - ✅ 90%+ sentiment classification accuracy
 - ✅ Positive replies get booking link within 10 minutes
 - ✅ 20%+ of positive replies convert to booked meetings
 
 ### Week 4 (Handoff):
-
 - ✅ All booked meetings in CRM within 1 hour
 - ✅ AE receives handoff report with meeting prep data
 - ✅ 50%+ of handed-off leads marked as "qualified opportunity" by AE
@@ -971,7 +907,6 @@ CREATE TABLE campaigns (
 ## Technical Debt Allowances (MVP Shortcuts)
 
 **Acceptable for MVP:**
-
 - ❌ Manual CSV lead upload (vs. automated discovery API)
 - ❌ Calendly link in email (vs. programmatic calendar booking)
 - ❌ Daily batch handoff (vs. real-time on booking)
@@ -979,7 +914,6 @@ CREATE TABLE campaigns (
 - ❌ Generic error handling (vs. specific retry logic per failure type)
 
 **Must Fix Before Scale:**
-
 - 🔧 Add connection pooling for Supabase (current: new connection per query)
 - 🔧 Implement circuit breaker for external APIs (current: retry forever)
 - 🔧 Add distributed tracing (current: logs only)
@@ -992,13 +926,11 @@ CREATE TABLE campaigns (
 **Format:** 5-minute check-in at 9 AM daily.
 
 **Questions:**
-
 1. What did I complete yesterday?
 2. What am I working on today?
 3. Any blockers?
 
 **Example Week 1 Day 3:**
-
 - ✅ Completed: Crunchbase API integration, RAG enrichment tested
 - 🚧 Today: Build deduplication agent, test with 100 leads
 - ⚠️ Blocker: Need Proxycurl API key (waiting on approval)
@@ -1008,16 +940,15 @@ CREATE TABLE campaigns (
 ## Appendix A: Environment Variables Checklist
 
 **Required for MVP:**
-
 ```bash
 # Core
 TENANT_ID=agentic-dev
-REDIS_URL=redis://default:<REDIS_PASSWORD>@host:port
+REDIS_URL=redis://default:password@host:port
 SUPABASE_URL=https://project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_KEY=your_anon_key
 
 # AI/ML
-OPENAI_API_KEY=your-openai-api-key
+OPENAI_API_KEY=sk-...
 
 # Enrichment (Phase 0)
 CRUNCHBASE_API_KEY=...
@@ -1041,11 +972,9 @@ SLACK_WEBHOOK_URL=...
 **New Files to Create:**
 
 **Phase 0:**
-
 - None (only config updates)
 
 **Phase 1:**
-
 - `config/qualification_rules.py`
 - `services/external_apis/apollo_client.py` (if using Apollo)
 - `scripts/import_leads_from_csv.py`
@@ -1054,7 +983,6 @@ SLACK_WEBHOOK_URL=...
 - `tiers/tier_3/deduplication_agent/consumer.py`
 
 **Phase 2:**
-
 - `services/external_apis/email_sender.py`
 - `config/outreach_sequences.py`
 - `scripts/campaign_metrics.py`
@@ -1062,7 +990,6 @@ SLACK_WEBHOOK_URL=...
 - SQL migration for `campaigns` table
 
 **Phase 3:**
-
 - `api/webhooks/email_reply.py`
 - `services/sentiment_analyzer.py`
 - `tiers/tier_3/booking_agent/booking.py`
@@ -1071,7 +998,6 @@ SLACK_WEBHOOK_URL=...
 - SQL migration for `bookings` table
 
 **Phase 4:**
-
 - `config/handoff_rules.py`
 - `services/external_apis/hubspot_client.py`
 - `scripts/handoff_to_ae.py`
@@ -1084,41 +1010,37 @@ SLACK_WEBHOOK_URL=...
 
 Track key decisions to avoid revisiting:
 
-| Decision             | Options Considered                    | Chosen | Rationale            | Date |
-| -------------------- | ------------------------------------- | ------ | -------------------- | ---- |
-| Lead Source          | Apollo, CSV Upload, Sales Nav Scraper | TBD    | Pending Week 1 Day 1 | -    |
-| Email Service        | SendGrid, Postmark, AWS SES           | TBD    | Pending Week 2 Day 1 | -    |
-| Calendar Tool        | Calendly, Cal.com, Google Calendar    | TBD    | Pending Week 3 Day 2 | -    |
-| CRM Platform         | HubSpot, Salesforce, Pipedrive        | TBD    | Pending Week 4 Day 1 | -    |
-| Scheduling Mechanism | Redis Delayed, Cron, Celery           | TBD    | Pending Week 2 Day 2 | -    |
+| Decision | Options Considered | Chosen | Rationale | Date |
+|----------|-------------------|--------|-----------|------|
+| Lead Source | Apollo, CSV Upload, Sales Nav Scraper | TBD | Pending Week 1 Day 1 | - |
+| Email Service | SendGrid, Postmark, AWS SES | TBD | Pending Week 2 Day 1 | - |
+| Calendar Tool | Calendly, Cal.com, Google Calendar | TBD | Pending Week 3 Day 2 | - |
+| CRM Platform | HubSpot, Salesforce, Pipedrive | TBD | Pending Week 4 Day 1 | - |
+| Scheduling Mechanism | Redis Delayed, Cron, Celery | TBD | Pending Week 2 Day 2 | - |
 
 ---
 
 ## Appendix D: Testing Strategy
 
 **Unit Tests:**
-
 - RAG agent qualification logic
 - Deduplication matching algorithm
 - Sentiment analyzer accuracy
 - Email template generation
 
 **Integration Tests:**
-
 - Manager → Orchestrator → Agent flow
 - External API error handling
 - Database write/read operations
 - Webhook endpoint responses
 
 **E2E Tests:**
-
 - Full pipeline: CSV → Enrichment → Outreach → Booking → Handoff
 - Multi-channel sequence timing
 - Reply detection → Sentiment → Action
 - CRM sync validation
 
 **Load Tests:**
-
 - 1000 leads/hour enrichment throughput
 - 500 emails/hour sending capacity
 - Webhook handling 100 replies/hour

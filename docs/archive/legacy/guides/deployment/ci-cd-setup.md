@@ -65,6 +65,7 @@ This document describes the continuous integration and deployment pipeline for t
 ### Two-Stage Validation
 
 1. **Pre-Production (preprod branch)**
+
    - Fast feedback loop (~3-5 minutes)
    - Code quality checks (linting, type checking)
    - Import smoke tests
@@ -614,8 +615,8 @@ Create `.env.test` (gitignored):
 ```bash
 # .env.test (DO NOT COMMIT)
 REDIS_URL=redis://localhost:6379
-OPENAI_API_KEY=your-openai-api-key
-ANTHROPIC_API_KEY=your-anthropic-api-key
+OPENAI_API_KEY=sk-proj-test-key
+ANTHROPIC_API_KEY=sk-ant-test-key
 DATABASE_URL=postgresql://localhost/agentic_test
 ```
 
@@ -860,6 +861,7 @@ Error: Secret REDIS_CLOUD_URL not found
 **Solution:**
 
 1. Verify secret exists in GitHub:
+
    - Go to: Settings → Secrets and variables → Actions
    - Check secret name matches exactly (case-sensitive)
 

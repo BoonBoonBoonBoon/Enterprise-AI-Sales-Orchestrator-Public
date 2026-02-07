@@ -21,9 +21,9 @@ cp deployment/.env.example .env
 
 # 3. Add your API keys
 # Edit .env with:
-# - OPENAI_API_KEY=your-openai-api-key
+# - OPENAI_API_KEY=sk-...
 # - SUPABASE_URL=...
-# - SUPABASE_ANON_KEY=your-anon-key
+# - SUPABASE_KEY=...
 
 # 4. Start services
 docker compose --profile local up -d --build
@@ -42,7 +42,6 @@ docker compose --profile local up -d
 ```
 
 **Configuration:**
-
 ```env
 REDIS_URL=redis://redis:6379/0        # Local Redis
 SUPABASE_URL=                          # Optional (use local Postgres)
@@ -50,7 +49,6 @@ VECTOR_DB_BACKEND=in-memory            # Fast, no external dependency
 ```
 
 **Services running:**
-
 - manager (tier_1)
 - leads_orchestrator, outreach_orchestrator (tier_2)
 - rag_agent, persistence_agent, copywriter_agent (tier_3)
@@ -64,7 +62,6 @@ docker compose up -d
 ```
 
 **Configuration:**
-
 ```env
 REDIS_URL=redis://staging-redis:6379    # Redis Cloud
 SUPABASE_URL=https://staging.supabase.co
@@ -81,7 +78,6 @@ docker stack deploy -c deployment/docker-compose.yml agentic
 ```
 
 **Configuration:**
-
 ```env
 REDIS_URL=redis://prod-redis:6379      # Managed Redis
 SUPABASE_URL=https://prod.supabase.co  # Production project
@@ -154,7 +150,6 @@ docker compose exec rag_agent env | grep REDIS
 **Location:** `deployment/docker/Dockerfile.worker`
 
 **Multi-stage build:**
-
 1. Base image (python:3.11-slim)
 2. Install dependencies
 3. Copy application code
@@ -163,7 +158,6 @@ docker compose exec rag_agent env | grep REDIS
 6. Define entrypoint
 
 **Key features:**
-
 - Minimal image size (~500MB)
 - Health checks included
 - Security best practices (non-root user)
@@ -191,9 +185,9 @@ docker images | grep agentic
 
 ```env
 # API Keys
-OPENAI_API_KEY=your-openai-api-key
+OPENAI_API_KEY=sk-proj-...
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_KEY=eyJ...
 
 # Infrastructure
 REDIS_URL=redis://redis:6379/0
@@ -288,12 +282,12 @@ curl http://localhost:8080/metrics | grep "worker_processing_seconds"
 
 ### Key Metrics to Monitor
 
-| Metric                 | Threshold       | Action                           |
-| ---------------------- | --------------- | -------------------------------- |
-| Consumer lag           | > 1000 messages | Scale up agents                  |
-| Error rate             | > 5%            | Check logs, investigate failures |
-| Processing latency p95 | > 5 seconds     | Optimize agent or add resources  |
-| Cache hit rate         | < 50%           | Increase cache size              |
+| Metric | Threshold | Action |
+|--------|-----------|--------|
+| Consumer lag | > 1000 messages | Scale up agents |
+| Error rate | > 5% | Check logs, investigate failures |
+| Processing latency p95 | > 5 seconds | Optimize agent or add resources |
+| Cache hit rate | < 50% | Increase cache size |
 
 ### Logging
 
@@ -485,13 +479,13 @@ services:
   manager:
     mem_limit: 512m
     cpus: 0.5
-
+  
   persistence_agent:
     mem_limit: 1g
     cpus: 1
-
+    
   copywriter_agent:
-    mem_limit: 2g # Higher for LLM processing
+    mem_limit: 2g  # Higher for LLM processing
     cpus: 2
 ```
 

@@ -55,7 +55,7 @@ APIError: Invalid API key
 
    ```bash
    SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-   SUPABASE_ANON_KEY=your-anon-key
+   SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIs...
    ```
 
 2. **Check key is anon key, not service role:**

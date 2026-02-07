@@ -557,14 +557,14 @@ Current implementation uses `GMAIL_READ_CREDENTIALS_PATH` + `GMAIL_TOKEN_PATH` (
 
 # Database
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_JWT_SECRET=your-jwt-secret-here
 
 # Redis
 REDIS_URL=redis://localhost:6379/0
 
 # LLM
-OPENAI_API_KEY=your-openai-api-key
+OPENAI_API_KEY=sk-your-openai-api-key
 
 # Core
 TENANT_ID=agentic-dev
@@ -572,7 +572,7 @@ TENANT_ID=agentic-dev
 # === OPTIONAL ===
 
 # Alternative LLM
-# ANTHROPIC_API_KEY=your-anthropic-api-key
+# ANTHROPIC_API_KEY=sk-ant-your-key
 # LLM_PROVIDER=openai
 # LLM_MODEL=gpt-4o
 

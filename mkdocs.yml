@@ -12,8 +12,8 @@ exclude_docs: |
   archive/**
 
 # Repository
-repo_name: BoonBoonBoonBoon/Agentic-System
-repo_url: https://boonboonboonboon.github.io/Enterprise-AI-Sales-Orchestrator-Public/
+repo_name: BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
+repo_url: https://github.com/BoonBoonBoonBoon/Enterprise-AI-Sales-Orchestrator-Public
 
 # Theme
 theme:
@@ -125,6 +125,8 @@ nav:
   
   - Components:
     - components/index.md
+    - Monty Copilot Schema: components/monty-copilot-schema.md
+    - Monty Copilot Backend: components/monty-copilot-backend.md
     - Tier 1 - Manager:
       - components/tier-1/index.md
       - Manager Agent: components/tier-1/manager.md

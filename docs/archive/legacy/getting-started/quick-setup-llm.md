@@ -19,14 +19,13 @@ pip install -r requirements.txt
 ### Option 1: Environment Variables (Recommended)
 
 **Windows PowerShell:**
-
 ```powershell
 # For OpenAI
-$env:OPENAI_API_KEY = "your-openai-api-key"
+$env:OPENAI_API_KEY = "sk-..."
 $env:LLM_PROVIDER = "openai"
 
 # For Anthropic
-$env:ANTHROPIC_API_KEY = "your-anthropic-api-key"
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
 $env:LLM_PROVIDER = "anthropic"
 
 # For placeholder (testing)
@@ -34,29 +33,27 @@ $env:LLM_PROVIDER = "placeholder"
 ```
 
 **Windows CMD:**
-
 ```cmd
-set OPENAI_API_KEY=your-openai-api-key
+set OPENAI_API_KEY=sk-...
 set LLM_PROVIDER=openai
 ```
 
 ### Option 2: .env File
 
 Create/update `.env` file in project root:
-
 ```bash
 # Choose one provider
 LLM_PROVIDER=openai
-OPENAI_API_KEY=your-openai-api-key
+OPENAI_API_KEY=sk-...
 
 # OR
 LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=your-anthropic-api-key
+ANTHROPIC_API_KEY=sk-ant-...
 
 # Optional: Lead context enrichment
 ENABLE_LEAD_CONTEXT_ENRICHMENT=1
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_KEY=eyJh...
 PERSIST_ALLOWED_TABLES=leads,lead_interactions
 ```
 
@@ -145,7 +142,6 @@ for stream, messages in results:
 ```
 
 Expected output:
-
 ```json
 {
   "content": {
@@ -166,25 +162,21 @@ Expected output:
 ## Troubleshooting
 
 ### "ImportError: No module named openai"
-
 ```bash
 pip install openai>=1.0.0
 ```
 
 ### "WARNING: OPENAI_API_KEY not set"
-
 ```powershell
 $env:OPENAI_API_KEY = "sk-..."
 ```
 
 ### "Rate limit exceeded"
-
 - Wait a few seconds between requests
 - Upgrade your OpenAI/Anthropic plan
 - Use multiple API keys with round-robin
 
 ### Worker not processing tasks
-
 1. Check Redis is running: `docker ps`
 2. Check worker logs for errors
 3. Verify stream exists: `redis-cli XINFO STREAM copy:tasks`

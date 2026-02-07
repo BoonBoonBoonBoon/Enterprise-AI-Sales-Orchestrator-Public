@@ -1,7 +1,6 @@
 how Redis can back your whole system: manager → orchestrator → low-level agents → health → auditing. I also included a ready-to-commit doc you can drop into the repo.
 
 High-level flows
-
 - Command path
   - Campaign Manager publishes a command (cm:commands).
   - Orchestrator consumes commands, expands into tasks (orchestrator:tasks).
@@ -15,7 +14,6 @@ High-level flows
   - DLQ captures hard failures (persist:dlq, rag:dlq).
 
 Keyspace layout (namespaced)
-
 - agentic-dev:cm:commands (STREAM) group=cm-managers
 - agentic-dev:cm:events (STREAM) group=cm-subscribers
 - agentic-dev:orchestrator:commands (STREAM) group=orchestrators
@@ -35,7 +33,6 @@ Keyspace layout (namespaced)
 - agentic-dev:cache:rag:chunks:{doc_id} (HASH) optional RAG cache with TTL
 
 Message shapes (examples)
-
 - cm:commands
   - { type: "start_campaign", campaign_id, params, req_id, ts }
 - orchestrator:tasks
@@ -54,7 +51,6 @@ Message shapes (examples)
   - { service: "rag_worker", id, status: "up", ts }
 
 Ops conventions
-
 - Consumer groups
   - cm-managers, orchestrators, rag-workers, persist-writers, auditors, ops
 - Trimming
@@ -67,7 +63,6 @@ Ops conventions
   - On final failure: XADD agentic-dev:persist:dlq with error context; alert from there.
 
 CLI/health you’ll use often
-
 - XINFO STREAM agentic-dev:persist:tasks
 - XINFO GROUPS agentic-dev:rag:tasks
 - XPENDING agentic-dev:rag:tasks rag-workers
@@ -75,7 +70,6 @@ CLI/health you’ll use often
 - GET agentic-dev:ops:hb:rag_worker:{id}
 
 Drop-in documentation file
-
 ````markdown
 # Redis Topology (Streams-first)
 
@@ -133,33 +127,16 @@ Namespace: `agentic-dev` (from REDIS_NAMESPACE)
 ## Message envelopes (examples)
 
 - `persist:tasks`
-
 ```json
 {"op":"upsert","table":"leads","row":{...},"on_conflict":["email"],"req_id":"uuid","ts":1739700000}
 ```
-
 - `rag:tasks`
-
 ```json
-{
-  "query": "lead emails for client X",
-  "k": 8,
-  "req_id": "uuid",
-  "ts": 1739700000
-}
+{"query":"lead emails for client X","k":8,"req_id":"uuid","ts":1739700000}
 ```
-
 - `audit:events`
-
 ```json
-{
-  "event": "task_acked",
-  "stream": "persist:tasks",
-  "msg_id": "176080...-0",
-  "worker": "writer-1",
-  "req_id": "uuid",
-  "ts": 1739700001
-}
+{"event":"task_acked","stream":"persist:tasks","msg_id":"176080...-0","worker":"writer-1","req_id":"uuid","ts":1739700001}
 ```
 
 ## Operational guidance
@@ -180,9 +157,11 @@ Namespace: `agentic-dev` (from REDIS_NAMESPACE)
 - `XPENDING agentic-dev:rag:tasks rag-workers`
 - `XINFO STREAM agentic-dev:audit:events`
 - `KEYS agentic-dev:ops:hb:*`
+
 ````
 
----
+----------------- ------------------------------------- ----------------------------------
+
 
 # 🏗️ Complete Agentic System Architecture Explained
 
@@ -195,16 +174,13 @@ You have a **three-tier agentic orchestration system** built on Redis Streams th
 ## 🎯 The Three Tiers
 
 ### **Tier 1: Manager Agent** (Strategic Orchestrator)
-
 **Role:** Entry point for all external requests. Makes high-level decisions about which orchestrators to use.
 
 **Streams:**
-
 - `agentic-dev:manager:tasks` ← External requests arrive here
 - `agentic-dev:manager:results` → Final results published here
 
 **What it does:**
-
 ```
 External Request: "Find 50 AI startups and create outreach campaign"
     ↓
@@ -218,7 +194,6 @@ Delegates to Tier 2:
 ```
 
 **Configuration:**
-
 - 2 retries (strategic level, rarely fails)
 - 120s timeout (coordination takes time)
 - Checkpointing enabled (multi-step workflows)
@@ -229,28 +204,27 @@ Delegates to Tier 2:
 ### **Tier 2: Orchestrators** (Business Logic)
 
 #### **2A: Leads Orchestrator**
-
 **Role:** Discovers, validates, and manages leads database
 
 **Streams:**
-
 - `agentic-dev:leads:tasks` ← Receives delegations from Manager
 - `agentic-dev:leads:results` → Publishes results back
 
 **8 Tools:**
 
 **Deterministic (Fast, Direct):**
-
 1. `validate_lead` - Check email format, required fields (<5ms)
 2. `write_lead` - Save single lead to database (50-100ms)
 3. `update_lead` - Modify lead fields (50-100ms)
 4. `query_leads` - Search leads by filters (50-500ms)
 5. `move_lead_stage` - Change pipeline stage (50-100ms)
 
-**Delegation (Complex, Subagent):** 6. `delegate_to_rag_agent` - Enrich lead with external data (2-5s) 7. `delegate_to_persistence_agent` - Bulk import 100+ leads (5-30s) 8. `delegate_to_deduplication_agent` - Find duplicates (3-10s)
+**Delegation (Complex, Subagent):**
+6. `delegate_to_rag_agent` - Enrich lead with external data (2-5s)
+7. `delegate_to_persistence_agent` - Bulk import 100+ leads (5-30s)
+8. `delegate_to_deduplication_agent` - Find duplicates (3-10s)
 
 **Example Flow:**
-
 ```
 Manager delegates: "Find tech leads in SF"
     ↓
@@ -264,7 +238,6 @@ Returns 50 leads to Manager
 ```
 
 **Configuration:**
-
 - 3 retries
 - 60s timeout
 - No checkpointing (fast operations)
@@ -273,34 +246,32 @@ Returns 50 leads to Manager
 ---
 
 #### **2B: Outreach Orchestrator**
-
 **Role:** Coordinates multi-channel outreach campaigns
 
 **Streams:**
-
 - `agentic-dev:outreach:tasks` ← Receives delegations from Manager
 - `agentic-dev:outreach:results` → Publishes results back
 
 **8 Tools:**
 
 **Deterministic:**
-
 1. `validate_campaign` - Check campaign data, prevent spam
 2. `create_touchpoint` - Create single outreach touchpoint
 3. `schedule_touchpoint` - Schedule touchpoint for future
 4. `query_campaign_metrics` - Get campaign performance stats
 5. `update_campaign_status` - Change campaign status
 
-**Delegation:** 6. `delegate_to_copywriter` - Generate email copy (3-8s) 7. `delegate_to_booking` - Schedule meetings (5-15s) 8. `delegate_to_sequencing` - Optimize send timing with ML (10-30s)
+**Delegation:**
+6. `delegate_to_copywriter` - Generate email copy (3-8s)
+7. `delegate_to_booking` - Schedule meetings (5-15s)
+8. `delegate_to_sequencing` - Optimize send timing with ML (10-30s)
 
 **Multi-Channel Strategy:**
-
 ```
 Email (Day 0) → LinkedIn (Day 3) → Phone (Day 7) → Follow-up (Day 10)
 ```
 
 **Example Flow:**
-
 ```
 Manager delegates: "Create campaign for 50 leads"
     ↓
@@ -316,7 +287,6 @@ Returns campaign plan to Manager
 ```
 
 **Configuration:**
-
 - 5 retries (external APIs can fail)
 - 120s timeout (copy generation takes time)
 - Checkpointing enabled (long campaigns)
@@ -329,7 +299,6 @@ Returns campaign plan to Manager
 These are called by Tier 2 orchestrators for specific tasks.
 
 **Streams (6 agents, TO BE BUILT):**
-
 - `agentic-dev:copywriter:tasks/results` - Email/content generation
 - `agentic-dev:booking:tasks/results` - Calendar/meeting scheduling
 - `agentic-dev:sequencing:tasks/results` - ML-based send optimization
@@ -357,7 +326,7 @@ These are called by Tier 2 orchestrators for specific tasks.
    Manager Deep Agent analyzes:
    - "This requires lead discovery AND outreach"
    - "First find leads, then create campaign"
-
+   
    Publishes to:
    ├─ agentic-dev:leads:tasks
    │  {"goal": "Find 100 tech leads in SF", "task_id": "abc-123"}
@@ -371,15 +340,15 @@ These are called by Tier 2 orchestrators for specific tasks.
    - "Use query_leads tool for tech companies in SF"
    - "Found 42 leads, need 58 more"
    - "Delegate to RAG agent to enrich from external sources"
-
+   
    Publishes to:
    └─ agentic-dev:rag:tasks
       {"goal": "Find 58 more tech leads in SF", "task_id": "abc-123-rag"}
-
+   
    RAG Agent (Tier 3):
    - Queries Crunchbase, LinkedIn APIs
    - Returns 60 enriched leads
-
+   
    Leads publishes result:
    └─ agentic-dev:leads:results
       {"task_id": "abc-123", "leads": [...102 leads...], "status": "completed"}
@@ -392,21 +361,21 @@ These are called by Tier 2 orchestrators for specific tasks.
    - "Create 4-touchpoint sequence"
    - "Need email copy for 102 leads"
    - "Delegate to Copywriter for personalized emails"
-
+   
    Publishes to:
    ├─ agentic-dev:copywriter:tasks
    │  {"goal": "Generate 102 personalized emails", "leads": [...]}
    └─ agentic-dev:booking:tasks
       {"goal": "Check availability for 102 meetings"}
-
+   
    Copywriter Agent (Tier 3):
    - Generates 102 personalized emails
    - Uses lead data for customization
-
+   
    Booking Agent (Tier 3):
    - Checks calendar availability
    - Suggests meeting times
-
+   
    Outreach publishes result:
    └─ agentic-dev:outreach:results
       {
@@ -426,7 +395,7 @@ These are called by Tier 2 orchestrators for specific tasks.
    Manager waits for both results:
    ✅ agentic-dev:leads:results (102 leads found)
    ✅ agentic-dev:outreach:results (campaign created)
-
+   
    Publishes final result:
    └─ agentic-dev:manager:results
       {
@@ -453,35 +422,29 @@ Every agent is wrapped with a **universal harness** that provides production fea
 ### **Features:**
 
 **1. Retry Logic** (3 strategies available):
-
 - Exponential Backoff (default for LLM APIs)
 - Linear Backoff (database locks)
 - Jittered Backoff (production, prevents thundering herd)
 
 **2. Observability** (3 backends):
-
 - Simple Logging (development, no dependencies)
 - OpenTelemetry (CNCF standard, vendor-agnostic)
 - Datadog (production APM)
 
 **3. Checkpointing** (3 backends):
-
 - Redis (fast, 24h TTL)
 - S3 (persistent audit trails, 30d+)
 - PostgreSQL (queryable analytics)
 
 **4. Quota Management** (2 implementations):
-
 - Redis Token Bucket (distributed with Lua script)
 - In-Memory (development, time-window based)
 
 **5. Health Checks:**
-
 - Component status monitoring
 - Graceful degradation for optional dependencies
 
 **Example Configuration:**
-
 ```python
 # Development (fast iteration)
 config = HarnessConfig.for_development()
@@ -504,7 +467,7 @@ config = HarnessConfig.for_production()
 
 ```bash
 # Redis Cloud Connection
-REDIS_URL=redis://default:<REDIS_PASSWORD>@redis-15143.c335.europe-west2-1.gce.redns.redis-cloud.com:15143/0
+REDIS_URL=redis://default:6uf8...@redis-15143.c335.europe-west2-1.gce.redns.redis-cloud.com:15143/0
 REDIS_NAMESPACE=agentic-dev  # Tenant isolation
 
 # Stream Configuration
@@ -524,11 +487,11 @@ REDIS_STREAM_TASKS_WRITE=persist:tasks
 REDIS_STREAM_RESULTS_WRITE=persist:results
 
 # OpenAI for Deep Agents
-OPENAI_API_KEY=your-openai-api-key
+OPENAI_API_KEY=sk-proj-...
 
 # Supabase (Database)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_URL=https://ekjjqcsruwltpqkbimjo.supabase.co
+SUPABASE_KEY=eyJhbGci...
 ```
 
 ---
@@ -536,7 +499,6 @@ SUPABASE_ANON_KEY=your-anon-key
 ## 📊 Current Stream Topology
 
 ### **Active Streams (Tier 1 & 2):**
-
 ```
 agentic-dev:manager:tasks       ← External entry point
 agentic-dev:manager:results     → Final results
@@ -549,7 +511,6 @@ agentic-dev:outreach:results    → Outreach results
 ```
 
 ### **To Be Built (Tier 3):**
-
 ```
 agentic-dev:copywriter:tasks/results      ⏳ Email generation
 agentic-dev:booking:tasks/results         ⏳ Meeting scheduling
@@ -564,7 +525,6 @@ agentic-dev:deduplication:tasks/results   ⏳ Duplicate detection
 ## 🚀 How to Run
 
 **Start All Consumers:**
-
 ```powershell
 # Terminal 1: Manager
 $env:OPENAI_API_KEY="sk-proj-..."
@@ -579,7 +539,6 @@ python agent/orchestrators/outreach_orchestrator/consumer.py
 ```
 
 **Send Test Task:**
-
 ```python
 import redis
 r = redis.Redis.from_url(os.getenv("REDIS_URL"), decode_responses=True)

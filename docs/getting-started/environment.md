@@ -24,9 +24,9 @@ Complete guide to configuring all environment variables required by the Agentic 
 | Variable                    | Required | Example                      | Description                              |
 | --------------------------- | -------- | ---------------------------- | ---------------------------------------- |
 | `SUPABASE_URL`              | ✅       | `https://abc123.supabase.co` | Your Supabase project URL                |
-| `SUPABASE_ANON_KEY`         | ✅       | `your-anon-key`              | Supabase anonymous/public key            |
+| `SUPABASE_ANON_KEY`         | ✅       | `eyJhbGciOiJIUzI1NiIs...`    | Supabase anonymous/public key            |
 | `SUPABASE_JWT_SECRET`       | ✅       | `your-jwt-secret`            | JWT secret for signing custom tokens     |
-| `SUPABASE_SERVICE_ROLE_KEY` | ⚠️       | `your-service-role-key`      | Service role key (admin operations only) |
+| `SUPABASE_SERVICE_ROLE_KEY` | ⚠️       | `eyJhbGciOiJIUzI1NiIs...`    | Service role key (admin operations only) |
 
 **Where to find:**
 
@@ -55,12 +55,12 @@ REDIS_URL=redis://redis:6379/0
 
 ### LLM Providers
 
-| Variable            | Required | Example                  | Description                                   |
-| ------------------- | -------- | ------------------------ | --------------------------------------------- |
-| `OPENAI_API_KEY`    | ✅\*     | `your-openai-api-key`    | OpenAI API key                                |
-| `ANTHROPIC_API_KEY` | ⚠️       | `your-anthropic-api-key` | Anthropic API key (alternative)               |
-| `LLM_PROVIDER`      | ⚠️       | `openai`                 | Which provider to use (`openai`, `anthropic`) |
-| `LLM_MODEL`         | ⚠️       | `gpt-4o`                 | Model name to use                             |
+| Variable            | Required | Example      | Description                                   |
+| ------------------- | -------- | ------------ | --------------------------------------------- |
+| `OPENAI_API_KEY`    | ✅\*     | `sk-...`     | OpenAI API key                                |
+| `ANTHROPIC_API_KEY` | ⚠️       | `sk-ant-...` | Anthropic API key (alternative)               |
+| `LLM_PROVIDER`      | ⚠️       | `openai`     | Which provider to use (`openai`, `anthropic`) |
+| `LLM_MODEL`         | ⚠️       | `gpt-4o`     | Model name to use                             |
 
 \*At least one LLM provider key is required.
 
@@ -76,8 +76,8 @@ REDIS_URL=redis://redis:6379/0
 | Variable              | Required | Example                            | Description          |
 | --------------------- | -------- | ---------------------------------- | -------------------- |
 | `GMAIL_CLIENT_ID`     | ⚠️       | `123...apps.googleusercontent.com` | OAuth client ID      |
-| `GMAIL_CLIENT_SECRET` | ⚠️       | `your-client-secret`               | OAuth client secret  |
-| `GMAIL_REFRESH_TOKEN` | ⚠️       | `your-refresh-token`               | OAuth refresh token  |
+| `GMAIL_CLIENT_SECRET` | ⚠️       | `GOCSPX-...`                       | OAuth client secret  |
+| `GMAIL_REFRESH_TOKEN` | ⚠️       | `1//0g...`                         | OAuth refresh token  |
 | `GMAIL_SENDER_EMAIL`  | ⚠️       | `you@gmail.com`                    | Sender email address |
 
 ### Observability
@@ -105,7 +105,7 @@ SUPABASE_JWT_SECRET=your-jwt-secret
 REDIS_URL=redis://localhost:6379/0
 
 # LLM
-OPENAI_API_KEY=your-openai-api-key
+OPENAI_API_KEY=sk-your-openai-key
 
 # Tenant
 TENANT_ID=agentic-dev
@@ -119,7 +119,7 @@ TENANT_ID=agentic-dev
 # REDIS_PASSWORD=your-redis-password
 
 # Alternative LLM
-# ANTHROPIC_API_KEY=your-anthropic-api-key
+# ANTHROPIC_API_KEY=sk-ant-your-key
 # LLM_PROVIDER=openai
 # LLM_MODEL=gpt-4o
 

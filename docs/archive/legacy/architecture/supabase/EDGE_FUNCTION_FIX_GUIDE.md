@@ -1,11 +1,9 @@
 # Fix the Edge Function - Manual Steps
 
 ## Problem
-
 The `generate-agent-jwts` Edge Function crashes with: `{"error":"Buffer is not defined"}`
 
 ## Solution
-
 Replace the Edge Function code with the fixed Deno-compatible version.
 
 ---
@@ -13,7 +11,7 @@ Replace the Edge Function code with the fixed Deno-compatible version.
 ## Option 1: Via Supabase Dashboard (Easiest)
 
 1. **Go to Edge Functions**
-   - Open Supabase Dashboard: https://supabase.com/dashboard/project/your-project-ref
+   - Open Supabase Dashboard: https://supabase.com/dashboard/project/ekjjqcsruwltpqkbimjo
    - Navigate to: Edge Functions → `generate-agent-jwts`
 
 2. **Edit the Function**
@@ -24,24 +22,22 @@ Replace the Edge Function code with the fixed Deno-compatible version.
 3. **Set Environment Variables** (if not already set)
    - Go to: Settings → Edge Functions → Environment Variables
    - Add: `JWT_SECRET` = (get from Settings → API → JWT Settings → JWT Secret)
-   - Add: `SUPABASE_URL` = `https://your-project.supabase.co`
+   - Add: `SUPABASE_URL` = `https://ekjjqcsruwltpqkbimjo.supabase.co`
    - Add: `SUPABASE_SERVICE_ROLE_KEY` = (your service_role key from .env)
 
 4. **Test It**
    Run in PowerShell:
-
    ```powershell
-   python -c "import requests; import os; from dotenv import load_dotenv; load_dotenv(); key = os.getenv('SUPABASE_SERVICE_ROLE_KEY'); url = os.getenv('SUPABASE_URL'); resp = requests.post(f'{url}/functions/v1/generate-agent-jwts', headers={'Authorization': f'Bearer {key}', 'apikey': key, 'Content-Type': 'application/json'}, json={}); print('Status:', resp.status_code); import json; data = resp.json(); print('Tokens:', json.dumps(data, indent=2))"
+   python -c "import requests; import os; from dotenv import load_dotenv; load_dotenv(); key = os.getenv('SUPABASE_KEY'); resp = requests.post('https://ekjjqcsruwltpqkbimjo.supabase.co/functions/v1/generate-agent-jwts', headers={'Authorization': f'Bearer {key}', 'apikey': key, 'Content-Type': 'application/json'}, json={}); print('Status:', resp.status_code); import json; data = resp.json(); print('Tokens:', json.dumps(data, indent=2))"
    ```
 
    Expected output:
-
    ```json
    Status: 200
    Tokens: {
      "tokens": {
-          "rag-agent-service": "<JWT_REDACTED>",
-          "persistence-agent-service": "<JWT_REDACTED>"
+       "rag-agent-service": "eyJ...",
+       "persistence-agent-service": "eyJ..."
      }
    }
    ```
@@ -61,7 +57,6 @@ Send them this message:
 > **Fix:** Please replace the function code with the Deno-compatible version in the attached file `supabase-edge-function-fixed.ts`
 >
 > **Environment Variables Needed:**
->
 > - `JWT_SECRET` (from Settings → API → JWT Secret)
 > - `SUPABASE_URL`
 > - `SUPABASE_SERVICE_ROLE_KEY`
@@ -90,7 +85,6 @@ If fixing the Edge Function is too much trouble, just:
 **Recommended:** Use Option 3 (SQL bypass) to unblock yourself immediately, then fix the Edge Function later when you have time.
 
 **Steps:**
-
 1. Copy all of `scripts/setup_rls_policies.sql`
 2. Paste into Supabase SQL Editor
 3. Click "Run"
